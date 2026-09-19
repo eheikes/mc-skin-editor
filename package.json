@@ -1,7 +1,7 @@
 {
   "name": "@eheikes/mc-skin-editor",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
