@@ -21,7 +21,10 @@
 			color: $activeColorHex,
 			borderWidth: 1,
 			borderColor: '#00000030',
-			layout: [{ component: iro.ui.Wheel, options: {} }]
+			layout: [
+				{ component: iro.ui.Wheel, options: {} },
+				{ component: iro.ui.Slider, options: { sliderType: 'value', sliderShape: 'bar' } }
+			]
 		});
 		instance.on('color:change', handleColorChange);
 		picker = instance;
