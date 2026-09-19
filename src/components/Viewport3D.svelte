@@ -1,318 +1,318 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
-	import * as THREE from 'three';
-	import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-	import { skinStore } from '../lib/stores/skin';
-	import { layerVisibility, partVisibility } from '../lib/stores/visibility';
-	import { buildSkinModel, type SkinModel } from '../lib/three/buildSkinModel';
-	import { pickPixel } from '../lib/three/raycastPixel';
-	import { applyToolAt, applyToolAlongLine, beginStroke, endStroke } from '../lib/paintController';
+  import { onMount, onDestroy } from 'svelte';
+  import * as THREE from 'three';
+  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+  import { skinStore } from '../lib/stores/skin';
+  import { layerVisibility, partVisibility } from '../lib/stores/visibility';
+  import { buildSkinModel, type SkinModel } from '../lib/three/buildSkinModel';
+  import { pickPixel } from '../lib/three/raycastPixel';
+  import { applyToolAt, applyToolAlongLine, beginStroke, endStroke } from '../lib/paintController';
 
-	let container: HTMLDivElement;
-	let renderer: THREE.WebGLRenderer;
-	let scene: THREE.Scene;
-	let camera: THREE.PerspectiveCamera;
-	let controls: OrbitControls;
-	let sourceCanvas: HTMLCanvasElement;
-	let sourceCtx: CanvasRenderingContext2D;
-	let model: SkinModel | null = null;
-	let raycaster: THREE.Raycaster;
-	let painting = false;
-	let lastPixel: { x: number; y: number } | null = null;
-	let resizeObserver: ResizeObserver;
-	let frameId = 0;
-	let tickFallback: ReturnType<typeof setInterval> | undefined;
-	let webglError = false;
+  let container: HTMLDivElement;
+  let renderer: THREE.WebGLRenderer;
+  let scene: THREE.Scene;
+  let camera: THREE.PerspectiveCamera;
+  let controls: OrbitControls;
+  let sourceCanvas: HTMLCanvasElement;
+  let sourceCtx: CanvasRenderingContext2D;
+  let model: SkinModel | null = null;
+  let raycaster: THREE.Raycaster;
+  let painting = false;
+  let lastPixel: { x: number; y: number } | null = null;
+  let resizeObserver: ResizeObserver;
+  let frameId = 0;
+  let tickFallback: ReturnType<typeof setInterval> | undefined;
+  let webglError = false;
 
-	const MIN_DIST = 20;
-	const MAX_DIST = 220;
+  const MIN_DIST = 20;
+  const MAX_DIST = 220;
 
-	/** Renders a frame immediately, instead of waiting for the next rAF tick — keeps the
-	 *  canvas from visibly lagging a change when the tab is backgrounded/throttled. */
-	function renderNow() {
-		if (renderer && scene && camera) renderer.render(scene, camera);
-	}
+  /** Renders a frame immediately, instead of waiting for the next rAF tick — keeps the
+   *  canvas from visibly lagging a change when the tab is backgrounded/throttled. */
+  function renderNow() {
+    if (renderer && scene && camera) renderer.render(scene, camera);
+  }
 
-	function applyVisibility() {
-		if (!model) return;
-		const layers = $layerVisibility;
-		const parts = $partVisibility;
-		for (const entry of model.parts) {
-			const visible = parts[entry.part];
-			if (entry.base) entry.base.visible = visible && layers.base;
-			if (entry.overlay) entry.overlay.visible = visible && layers.overlay;
-			if (entry.outline) entry.outline.visible = visible;
-		}
-		renderNow();
-	}
+  function applyVisibility() {
+    if (!model) return;
+    const layers = $layerVisibility;
+    const parts = $partVisibility;
+    for (const entry of model.parts) {
+      const visible = parts[entry.part];
+      if (entry.base) entry.base.visible = visible && layers.base;
+      if (entry.overlay) entry.overlay.visible = visible && layers.overlay;
+      if (entry.outline) entry.outline.visible = visible;
+    }
+    renderNow();
+  }
 
-	function visibleMeshes(): THREE.Mesh[] {
-		if (!model) return [];
-		return model.meshes.filter((m) => m.visible);
-	}
+  function visibleMeshes(): THREE.Mesh[] {
+    if (!model) return [];
+    return model.meshes.filter((m) => m.visible);
+  }
 
-	function syncTexture() {
-		if (!model) return;
-		const { width, height, pixels } = $skinStore;
-		if (sourceCanvas.width !== width) sourceCanvas.width = width;
-		if (sourceCanvas.height !== height) sourceCanvas.height = height;
-		sourceCtx.putImageData(new ImageData(new Uint8ClampedArray(pixels), width, height), 0, 0);
-		model.texture.needsUpdate = true;
-		renderNow();
-	}
+  function syncTexture() {
+    if (!model) return;
+    const { width, height, pixels } = $skinStore;
+    if (sourceCanvas.width !== width) sourceCanvas.width = width;
+    if (sourceCanvas.height !== height) sourceCanvas.height = height;
+    sourceCtx.putImageData(new ImageData(new Uint8ClampedArray(pixels), width, height), 0, 0);
+    model.texture.needsUpdate = true;
+    renderNow();
+  }
 
-	function rebuildModel() {
-		if (model) {
-			scene.remove(model.group);
-			model.dispose();
-			model = null;
-		}
-		const { width, height, pixels, model: modelType, resolution } = $skinStore;
-		if (sourceCanvas.width !== width) sourceCanvas.width = width;
-		if (sourceCanvas.height !== height) sourceCanvas.height = height;
-		sourceCtx.putImageData(new ImageData(new Uint8ClampedArray(pixels), width, height), 0, 0);
-		model = buildSkinModel(sourceCanvas, modelType, resolution);
-		scene.add(model.group);
-		applyVisibility();
-		renderNow();
-	}
+  function rebuildModel() {
+    if (model) {
+      scene.remove(model.group);
+      model.dispose();
+      model = null;
+    }
+    const { width, height, pixels, model: modelType, resolution } = $skinStore;
+    if (sourceCanvas.width !== width) sourceCanvas.width = width;
+    if (sourceCanvas.height !== height) sourceCanvas.height = height;
+    sourceCtx.putImageData(new ImageData(new Uint8ClampedArray(pixels), width, height), 0, 0);
+    model = buildSkinModel(sourceCanvas, modelType, resolution);
+    scene.add(model.group);
+    applyVisibility();
+    renderNow();
+  }
 
-	let lastModel = '';
-	$: if (scene) {
-		const key = `${$skinStore.model}:${$skinStore.resolution}`;
-		if (key !== lastModel) {
-			lastModel = key;
-			rebuildModel();
-		} else {
-			syncTexture();
-		}
-	}
-	$: if (model) {
-		$layerVisibility;
-		$partVisibility;
-		applyVisibility();
-	}
+  let lastModel = '';
+  $: if (scene) {
+    const key = `${$skinStore.model}:${$skinStore.resolution}`;
+    if (key !== lastModel) {
+      lastModel = key;
+      rebuildModel();
+    } else {
+      syncTexture();
+    }
+  }
+  $: if (model) {
+    $layerVisibility;
+    $partVisibility;
+    applyVisibility();
+  }
 
-	function eventToNDC(e: PointerEvent): THREE.Vector2 {
-		const rect = renderer.domElement.getBoundingClientRect();
-		return new THREE.Vector2(
-			((e.clientX - rect.left) / rect.width) * 2 - 1,
-			-((e.clientY - rect.top) / rect.height) * 2 + 1
-		);
-	}
+  function eventToNDC(e: PointerEvent): THREE.Vector2 {
+    const rect = renderer.domElement.getBoundingClientRect();
+    return new THREE.Vector2(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1
+    );
+  }
 
-	function hitTest(e: PointerEvent): { x: number; y: number } | null {
-		raycaster.setFromCamera(eventToNDC(e), camera);
-		const { width, height } = $skinStore;
-		return pickPixel(raycaster, visibleMeshes(), width, height);
-	}
+  function hitTest(e: PointerEvent): { x: number; y: number } | null {
+    raycaster.setFromCamera(eventToNDC(e), camera);
+    const { width, height } = $skinStore;
+    return pickPixel(raycaster, visibleMeshes(), width, height);
+  }
 
-	function onContainerPointerDownCapture(e: PointerEvent) {
-		const hit = hitTest(e);
-		if (!hit) return;
-		controls.enabled = false;
-		painting = true;
-		lastPixel = hit;
-		beginStroke();
-		applyToolAt(hit.x, hit.y);
-	}
+  function onContainerPointerDownCapture(e: PointerEvent) {
+    const hit = hitTest(e);
+    if (!hit) return;
+    controls.enabled = false;
+    painting = true;
+    lastPixel = hit;
+    beginStroke();
+    applyToolAt(hit.x, hit.y);
+  }
 
-	function onWindowPointerMove(e: PointerEvent) {
-		if (!painting) return;
-		const hit = hitTest(e);
-		if (!hit) return;
-		if (lastPixel) applyToolAlongLine(lastPixel.x, lastPixel.y, hit.x, hit.y);
-		else applyToolAt(hit.x, hit.y);
-		lastPixel = hit;
-	}
+  function onWindowPointerMove(e: PointerEvent) {
+    if (!painting) return;
+    const hit = hitTest(e);
+    if (!hit) return;
+    if (lastPixel) applyToolAlongLine(lastPixel.x, lastPixel.y, hit.x, hit.y);
+    else applyToolAt(hit.x, hit.y);
+    lastPixel = hit;
+  }
 
-	function onWindowPointerUp() {
-		if (!painting) return;
-		painting = false;
-		lastPixel = null;
-		controls.enabled = true;
-		endStroke();
-	}
+  function onWindowPointerUp() {
+    if (!painting) return;
+    painting = false;
+    lastPixel = null;
+    controls.enabled = true;
+    endStroke();
+  }
 
-	export function zoomIn() {
-		dolly(0.85);
-	}
-	export function zoomOut() {
-		dolly(1.18);
-	}
-	function dolly(factor: number) {
-		const dir = new THREE.Vector3().subVectors(camera.position, controls.target);
-		const dist = Math.max(MIN_DIST, Math.min(MAX_DIST, dir.length() * factor));
-		dir.setLength(dist);
-		camera.position.copy(controls.target).add(dir);
-		renderNow();
-	}
+  export function zoomIn() {
+    dolly(0.85);
+  }
+  export function zoomOut() {
+    dolly(1.18);
+  }
+  function dolly(factor: number) {
+    const dir = new THREE.Vector3().subVectors(camera.position, controls.target);
+    const dist = Math.max(MIN_DIST, Math.min(MAX_DIST, dir.length() * factor));
+    dir.setLength(dist);
+    camera.position.copy(controls.target).add(dir);
+    renderNow();
+  }
 
-	function animate() {
-		frameId = requestAnimationFrame(animate);
-		controls.update();
-		renderer.render(scene, camera);
-	}
+  function animate() {
+    frameId = requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  }
 
-	function applySize(width: number, height: number) {
-		if (width < 2 || height < 2) return false;
-		camera.aspect = width / height;
-		camera.updateProjectionMatrix();
-		renderer.setSize(width, height);
-		renderNow();
-		return true;
-	}
+  function applySize(width: number, height: number) {
+    if (width < 2 || height < 2) return false;
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+    renderer.setSize(width, height);
+    renderNow();
+    return true;
+  }
 
-	function resizeToContainer() {
-		const r = container.getBoundingClientRect();
-		return applySize(r.width, r.height);
-	}
+  function resizeToContainer() {
+    const r = container.getBoundingClientRect();
+    return applySize(r.width, r.height);
+  }
 
-	onMount(() => {
-		try {
-			sourceCanvas = document.createElement('canvas');
-			sourceCtx = sourceCanvas.getContext('2d')!;
+  onMount(() => {
+    try {
+      sourceCanvas = document.createElement('canvas');
+      sourceCtx = sourceCanvas.getContext('2d')!;
 
-			scene = new THREE.Scene();
-			scene.background = new THREE.Color(0x2b2f36);
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x2b2f36);
 
-			camera = new THREE.PerspectiveCamera(35, 16 / 9, 1, 1000);
-			camera.position.set(45, 30, 70);
+      camera = new THREE.PerspectiveCamera(35, 16 / 9, 1, 1000);
+      camera.position.set(45, 30, 70);
 
-			renderer = new THREE.WebGLRenderer({ antialias: true, failIfMajorPerformanceCaveat: false });
-			renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-			renderer.setSize(300, 169);
-			container.appendChild(renderer.domElement);
+      renderer = new THREE.WebGLRenderer({ antialias: true, failIfMajorPerformanceCaveat: false });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(300, 169);
+      container.appendChild(renderer.domElement);
 
-			controls = new OrbitControls(camera, renderer.domElement);
-			controls.target.set(0, 16, 0);
-			controls.enableDamping = true;
-			controls.dampingFactor = 0.12;
-			controls.minDistance = MIN_DIST;
-			controls.maxDistance = MAX_DIST;
-			controls.update();
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.target.set(0, 16, 0);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.12;
+      controls.minDistance = MIN_DIST;
+      controls.maxDistance = MAX_DIST;
+      controls.update();
 
-			raycaster = new THREE.Raycaster();
+      raycaster = new THREE.Raycaster();
 
-			rebuildModel();
-			lastModel = `${$skinStore.model}:${$skinStore.resolution}`;
+      rebuildModel();
+      lastModel = `${$skinStore.model}:${$skinStore.resolution}`;
 
-			container.addEventListener('pointerdown', onContainerPointerDownCapture, { capture: true });
-			window.addEventListener('pointermove', onWindowPointerMove);
-			window.addEventListener('pointerup', onWindowPointerUp);
-			window.addEventListener('pointercancel', onWindowPointerUp);
+      container.addEventListener('pointerdown', onContainerPointerDownCapture, { capture: true });
+      window.addEventListener('pointermove', onWindowPointerMove);
+      window.addEventListener('pointerup', onWindowPointerUp);
+      window.addEventListener('pointercancel', onWindowPointerUp);
 
-			// The container's layout box may not be fully settled at this exact
-			// synchronous point (e.g. right after a conditional {#if} mount, or
-			// during dev-mode CSS injection). Retry via both rAF and a plain timer
-			// — rAF alone isn't enough on a throttled/backgrounded tab, since it's
-			// tied to the compositor and can stall for longer than is reasonable
-			// here. ResizeObserver takes over from there for any later resizes.
-			if (!resizeToContainer()) {
-				requestAnimationFrame(resizeToContainer);
-				setTimeout(resizeToContainer, 60);
-				setTimeout(resizeToContainer, 250);
-			}
+      // The container's layout box may not be fully settled at this exact
+      // synchronous point (e.g. right after a conditional {#if} mount, or
+      // during dev-mode CSS injection). Retry via both rAF and a plain timer
+      // — rAF alone isn't enough on a throttled/backgrounded tab, since it's
+      // tied to the compositor and can stall for longer than is reasonable
+      // here. ResizeObserver takes over from there for any later resizes.
+      if (!resizeToContainer()) {
+        requestAnimationFrame(resizeToContainer);
+        setTimeout(resizeToContainer, 60);
+        setTimeout(resizeToContainer, 250);
+      }
 
-			resizeObserver = new ResizeObserver(() => resizeToContainer());
-			resizeObserver.observe(container);
+      resizeObserver = new ResizeObserver(() => resizeToContainer());
+      resizeObserver.observe(container);
 
-			animate();
-			// Supplements the rAF loop above with a plain-timer tick, so orbit
-			// damping/rendering keeps progressing even on a throttled/backgrounded
-			// tab where rAF can stall far longer than a user would expect.
-			tickFallback = setInterval(() => {
-				if (controls) controls.update();
-				renderNow();
-			}, 100);
-		} catch (err) {
-			// WebGL can be unavailable (old hardware, disabled GPU
-			// acceleration, some sandboxed/virtualized environments). Fail
-			// soft instead of throwing out of onMount, which would otherwise
-			// leave the rest of the app's mount cycle in an inconsistent
-			// state.
-			console.error('3D viewport unavailable:', err);
-			webglError = true;
-		}
-	});
+      animate();
+      // Supplements the rAF loop above with a plain-timer tick, so orbit
+      // damping/rendering keeps progressing even on a throttled/backgrounded
+      // tab where rAF can stall far longer than a user would expect.
+      tickFallback = setInterval(() => {
+        if (controls) controls.update();
+        renderNow();
+      }, 100);
+    } catch (err) {
+      // WebGL can be unavailable (old hardware, disabled GPU
+      // acceleration, some sandboxed/virtualized environments). Fail
+      // soft instead of throwing out of onMount, which would otherwise
+      // leave the rest of the app's mount cycle in an inconsistent
+      // state.
+      console.error('3D viewport unavailable:', err);
+      webglError = true;
+    }
+  });
 
-	onDestroy(() => {
-		cancelAnimationFrame(frameId);
-		if (tickFallback) clearInterval(tickFallback);
-		resizeObserver?.disconnect();
-		container?.removeEventListener('pointerdown', onContainerPointerDownCapture, { capture: true } as EventListenerOptions);
-		window.removeEventListener('pointermove', onWindowPointerMove);
-		window.removeEventListener('pointerup', onWindowPointerUp);
-		window.removeEventListener('pointercancel', onWindowPointerUp);
-		model?.dispose();
-		renderer?.dispose();
-		controls?.dispose();
-	});
+  onDestroy(() => {
+    cancelAnimationFrame(frameId);
+    if (tickFallback) clearInterval(tickFallback);
+    resizeObserver?.disconnect();
+    container?.removeEventListener('pointerdown', onContainerPointerDownCapture, { capture: true } as EventListenerOptions);
+    window.removeEventListener('pointermove', onWindowPointerMove);
+    window.removeEventListener('pointerup', onWindowPointerUp);
+    window.removeEventListener('pointercancel', onWindowPointerUp);
+    model?.dispose();
+    renderer?.dispose();
+    controls?.dispose();
+  });
 </script>
 
 <div class="viewport" bind:this={container} style="touch-action: none;">
-	{#if webglError}
-		<div class="webgl-fallback">
-			<p>3D preview unavailable — your browser or device doesn't support WebGL.</p>
-			<p class="hint">You can still edit the skin using the 2D texture map.</p>
-		</div>
-	{:else}
-		<div class="zoom-controls">
-			<button type="button" on:click={zoomIn} title="Zoom in" aria-label="Zoom in">+</button>
-			<button type="button" on:click={zoomOut} title="Zoom out" aria-label="Zoom out">−</button>
-		</div>
-	{/if}
+  {#if webglError}
+    <div class="webgl-fallback">
+      <p>3D preview unavailable — your browser or device doesn't support WebGL.</p>
+      <p class="hint">You can still edit the skin using the 2D texture map.</p>
+    </div>
+  {:else}
+    <div class="zoom-controls">
+      <button type="button" on:click={zoomIn} title="Zoom in" aria-label="Zoom in">+</button>
+      <button type="button" on:click={zoomOut} title="Zoom out" aria-label="Zoom out">−</button>
+    </div>
+  {/if}
 </div>
 
 <style>
-	.viewport {
-		position: relative;
-		width: 100%;
-		height: 100%;
-		border-radius: 6px;
-		overflow: hidden;
-		cursor: grab;
-	}
-	.viewport :global(canvas) {
-		display: block;
-	}
-	.webgl-fallback {
-		height: 100%;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		text-align: center;
-		gap: 6px;
-		padding: 24px;
-		color: var(--text-dim, #9a9ba3);
-		cursor: default;
-	}
-	.webgl-fallback .hint {
-		font-size: 12px;
-		opacity: 0.8;
-	}
-	.zoom-controls {
-		position: absolute;
-		right: 10px;
-		bottom: 10px;
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		z-index: 2;
-	}
-	.zoom-controls button {
-		width: 32px;
-		height: 32px;
-		font-size: 18px;
-		line-height: 1;
-		border-radius: 6px;
-		border: 1px solid var(--border, #555);
-		background: var(--panel-bg, #333);
-		color: var(--text, #eee);
-		cursor: pointer;
-	}
-	.zoom-controls button:hover {
-		background: var(--panel-bg-hover, #444);
-	}
+  .viewport {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: grab;
+  }
+  .viewport :global(canvas) {
+    display: block;
+  }
+  .webgl-fallback {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 6px;
+    padding: 24px;
+    color: var(--text-dim, #9a9ba3);
+    cursor: default;
+  }
+  .webgl-fallback .hint {
+    font-size: 12px;
+    opacity: 0.8;
+  }
+  .zoom-controls {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 2;
+  }
+  .zoom-controls button {
+    width: 32px;
+    height: 32px;
+    font-size: 18px;
+    line-height: 1;
+    border-radius: 6px;
+    border: 1px solid var(--border, #555);
+    background: var(--panel-bg, #333);
+    color: var(--text, #eee);
+    cursor: pointer;
+  }
+  .zoom-controls button:hover {
+    background: var(--panel-bg-hover, #444);
+  }
 </style>
