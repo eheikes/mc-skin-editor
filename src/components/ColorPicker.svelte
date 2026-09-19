@@ -58,6 +58,12 @@
 		if (e.key === 'Enter') commitHexInput();
 	}
 
+	const presets = ['#ffffff', '#000000'];
+
+	function selectPreset(hex: string) {
+		activeColorHex.set(hex);
+	}
+
 	export function darken() {
 		activeColorHex.set(adjustLightness($activeColorHex, -LIGHTNESS_STEP));
 	}
@@ -67,6 +73,20 @@
 </script>
 
 <div class="color-picker">
+	<div class="preset-row">
+		{#each presets as hex}
+			<button
+				type="button"
+				class="preset-swatch"
+				class:active={$activeColorHex.toLowerCase() === hex}
+				style="background: {hex};"
+				title={hex}
+				aria-label="Select {hex === '#ffffff' ? 'white' : 'black'}"
+				on:click={() => selectPreset(hex)}
+			></button>
+		{/each}
+	</div>
+
 	<div class="wheel" bind:this={wheelEl}></div>
 
 	<div class="swatch-row">
@@ -99,6 +119,27 @@
 	.wheel {
 		display: flex;
 		justify-content: center;
+	}
+	.preset-row {
+		display: flex;
+		gap: 8px;
+		width: 100%;
+	}
+	.preset-swatch {
+		flex: 1;
+		height: 26px;
+		border-radius: 6px;
+		border: 1px solid var(--border, #555);
+		cursor: pointer;
+		padding: 0;
+	}
+	.preset-swatch:hover {
+		outline: 2px solid var(--accent, #7fb0ff);
+		outline-offset: 1px;
+	}
+	.preset-swatch.active {
+		border-color: var(--accent, #7fb0ff);
+		box-shadow: 0 0 0 1px var(--accent, #7fb0ff);
 	}
 	.swatch-row {
 		display: flex;
