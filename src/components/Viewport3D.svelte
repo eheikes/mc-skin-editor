@@ -22,6 +22,7 @@
 	let resizeObserver: ResizeObserver;
 	let frameId = 0;
 	let tickFallback: ReturnType<typeof setInterval> | undefined;
+	let webglError = false;
 
 	const MIN_DIST = 20;
 	const MAX_DIST = 220;
@@ -168,61 +169,71 @@
 	}
 
 	onMount(() => {
-		sourceCanvas = document.createElement('canvas');
-		sourceCtx = sourceCanvas.getContext('2d')!;
+		try {
+			sourceCanvas = document.createElement('canvas');
+			sourceCtx = sourceCanvas.getContext('2d')!;
 
-		scene = new THREE.Scene();
-		scene.background = new THREE.Color(0x2b2f36);
+			scene = new THREE.Scene();
+			scene.background = new THREE.Color(0x2b2f36);
 
-		camera = new THREE.PerspectiveCamera(35, 16 / 9, 1, 1000);
-		camera.position.set(45, 30, 70);
+			camera = new THREE.PerspectiveCamera(35, 16 / 9, 1, 1000);
+			camera.position.set(45, 30, 70);
 
-		renderer = new THREE.WebGLRenderer({ antialias: true });
-		renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-		renderer.setSize(300, 169);
-		container.appendChild(renderer.domElement);
+			renderer = new THREE.WebGLRenderer({ antialias: true, failIfMajorPerformanceCaveat: false });
+			renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+			renderer.setSize(300, 169);
+			container.appendChild(renderer.domElement);
 
-		controls = new OrbitControls(camera, renderer.domElement);
-		controls.target.set(0, 16, 0);
-		controls.enableDamping = true;
-		controls.dampingFactor = 0.12;
-		controls.minDistance = MIN_DIST;
-		controls.maxDistance = MAX_DIST;
-		controls.update();
+			controls = new OrbitControls(camera, renderer.domElement);
+			controls.target.set(0, 16, 0);
+			controls.enableDamping = true;
+			controls.dampingFactor = 0.12;
+			controls.minDistance = MIN_DIST;
+			controls.maxDistance = MAX_DIST;
+			controls.update();
 
-		raycaster = new THREE.Raycaster();
+			raycaster = new THREE.Raycaster();
 
-		rebuildModel();
-		lastModel = `${$skinStore.model}:${$skinStore.resolution}`;
+			rebuildModel();
+			lastModel = `${$skinStore.model}:${$skinStore.resolution}`;
 
-		container.addEventListener('pointerdown', onContainerPointerDownCapture, { capture: true });
-		window.addEventListener('pointermove', onWindowPointerMove);
-		window.addEventListener('pointerup', onWindowPointerUp);
-		window.addEventListener('pointercancel', onWindowPointerUp);
+			container.addEventListener('pointerdown', onContainerPointerDownCapture, { capture: true });
+			window.addEventListener('pointermove', onWindowPointerMove);
+			window.addEventListener('pointerup', onWindowPointerUp);
+			window.addEventListener('pointercancel', onWindowPointerUp);
 
-		// The container's layout box may not be fully settled at this exact
-		// synchronous point (e.g. right after a conditional {#if} mount, or
-		// during dev-mode CSS injection). Retry via both rAF and a plain timer
-		// — rAF alone isn't enough on a throttled/backgrounded tab, since it's
-		// tied to the compositor and can stall for longer than is reasonable
-		// here. ResizeObserver takes over from there for any later resizes.
-		if (!resizeToContainer()) {
-			requestAnimationFrame(resizeToContainer);
-			setTimeout(resizeToContainer, 60);
-			setTimeout(resizeToContainer, 250);
+			// The container's layout box may not be fully settled at this exact
+			// synchronous point (e.g. right after a conditional {#if} mount, or
+			// during dev-mode CSS injection). Retry via both rAF and a plain timer
+			// — rAF alone isn't enough on a throttled/backgrounded tab, since it's
+			// tied to the compositor and can stall for longer than is reasonable
+			// here. ResizeObserver takes over from there for any later resizes.
+			if (!resizeToContainer()) {
+				requestAnimationFrame(resizeToContainer);
+				setTimeout(resizeToContainer, 60);
+				setTimeout(resizeToContainer, 250);
+			}
+
+			resizeObserver = new ResizeObserver(() => resizeToContainer());
+			resizeObserver.observe(container);
+
+			animate();
+			// Supplements the rAF loop above with a plain-timer tick, so orbit
+			// damping/rendering keeps progressing even on a throttled/backgrounded
+			// tab where rAF can stall far longer than a user would expect.
+			tickFallback = setInterval(() => {
+				if (controls) controls.update();
+				renderNow();
+			}, 100);
+		} catch (err) {
+			// WebGL can be unavailable (old hardware, disabled GPU
+			// acceleration, some sandboxed/virtualized environments). Fail
+			// soft instead of throwing out of onMount, which would otherwise
+			// leave the rest of the app's mount cycle in an inconsistent
+			// state.
+			console.error('3D viewport unavailable:', err);
+			webglError = true;
 		}
-
-		resizeObserver = new ResizeObserver(() => resizeToContainer());
-		resizeObserver.observe(container);
-
-		animate();
-		// Supplements the rAF loop above with a plain-timer tick, so orbit
-		// damping/rendering keeps progressing even on a throttled/backgrounded
-		// tab where rAF can stall far longer than a user would expect.
-		tickFallback = setInterval(() => {
-			if (controls) controls.update();
-			renderNow();
-		}, 100);
 	});
 
 	onDestroy(() => {
@@ -240,10 +251,17 @@
 </script>
 
 <div class="viewport" bind:this={container} style="touch-action: none;">
-	<div class="zoom-controls">
-		<button type="button" on:click={zoomIn} title="Zoom in" aria-label="Zoom in">+</button>
-		<button type="button" on:click={zoomOut} title="Zoom out" aria-label="Zoom out">−</button>
-	</div>
+	{#if webglError}
+		<div class="webgl-fallback">
+			<p>3D preview unavailable — your browser or device doesn't support WebGL.</p>
+			<p class="hint">You can still edit the skin using the 2D texture map.</p>
+		</div>
+	{:else}
+		<div class="zoom-controls">
+			<button type="button" on:click={zoomIn} title="Zoom in" aria-label="Zoom in">+</button>
+			<button type="button" on:click={zoomOut} title="Zoom out" aria-label="Zoom out">−</button>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -257,6 +275,22 @@
 	}
 	.viewport :global(canvas) {
 		display: block;
+	}
+	.webgl-fallback {
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		text-align: center;
+		gap: 6px;
+		padding: 24px;
+		color: var(--text-dim, #9a9ba3);
+		cursor: default;
+	}
+	.webgl-fallback .hint {
+		font-size: 12px;
+		opacity: 0.8;
 	}
 	.zoom-controls {
 		position: absolute;
