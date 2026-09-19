@@ -74,4 +74,4 @@ export function adjustLightness(hex: string, deltaPercent: number): string {
 	return rgbToHex(out.r, out.g, out.b);
 }
 
-export const LIGHTNESS_STEP = 6;
+export const LIGHTNESS_STEP = 3;
