@@ -42,6 +42,8 @@
       if (entry.base) entry.base.visible = visible && layers.base;
       if (entry.overlay) entry.overlay.visible = visible && layers.overlay;
       if (entry.outline) entry.outline.visible = visible;
+      if (entry.baseGrid) entry.baseGrid.visible = visible && layers.base;
+      if (entry.overlayGrid) entry.overlayGrid.visible = visible && layers.overlay;
     }
     renderNow();
   }

@@ -16,6 +16,8 @@ export interface PartMeshes {
   base: THREE.Mesh | null
   overlay: THREE.Mesh | null
   outline: THREE.LineSegments | null
+  baseGrid: THREE.LineSegments | null
+  overlayGrid: THREE.LineSegments | null
 }
 
 export interface SkinModel {
@@ -55,6 +57,32 @@ function addFace (
   indices.push(base, base + 2, base + 1, base + 1, base + 2, base + 3)
 }
 
+function lerpCorner (a: Corner, b: Corner, t: number): Corner {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
+}
+
+/** Appends one grid line per pixel boundary on a face, so individual skin pixels read as a grid on the 3D model (mirroring the 2D texture map's per-pixel grid). */
+function addFaceGrid (
+  gridPositions: number[],
+  corners: { tl: Corner, tr: Corner, bl: Corner, br: Corner },
+  cols: number,
+  rows: number
+): void {
+  for (let i = 0; i <= cols; i++) {
+    const t = i / cols
+    gridPositions.push(...lerpCorner(corners.tl, corners.tr, t), ...lerpCorner(corners.bl, corners.br, t))
+  }
+  for (let j = 0; j <= rows; j++) {
+    const t = j / rows
+    gridPositions.push(...lerpCorner(corners.tl, corners.bl, t), ...lerpCorner(corners.tr, corners.br, t))
+  }
+}
+
+interface PartGeometry {
+  geometry: THREE.BufferGeometry
+  gridPositions: number[]
+}
+
 /** Builds one part's box geometry (base or inflated overlay), or null if this part/layer has no texture to show. */
 function buildPartGeometry (
   part: PartName,
@@ -63,7 +91,7 @@ function buildPartGeometry (
   resolution: ResolutionId,
   atlasW: number,
   atlasH: number
-): THREE.BufferGeometry | null {
+): PartGeometry | null {
   const dims = partDims(part, model)
   const inset = layer === 'overlay' ? OVERLAY_INSET : 0
   const hx = dims.dx / 2 + inset
@@ -109,11 +137,14 @@ function buildPartGeometry (
     }
   ]
 
+  const gridPositions: number[] = []
+
   for (const f of faces) {
     const source = renderFaceSource(part, layer, f.face, model, resolution)
     if (source == null) continue
     any = true
     addFace(positions, normals, uvs, indices, f.corners, f.normal, source.rect, atlasW, atlasH, source.flipX)
+    addFaceGrid(gridPositions, f.corners, source.rect.w, source.rect.h)
   }
 
   if (!any) return null
@@ -123,7 +154,7 @@ function buildPartGeometry (
   geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
   geometry.setIndex(indices)
-  return geometry
+  return { geometry, gridPositions }
 }
 
 export function buildSkinModel (canvas: HTMLCanvasElement, model: ModelType, resolution: ResolutionId): SkinModel {
@@ -148,15 +179,16 @@ export function buildSkinModel (canvas: HTMLCanvasElement, model: ModelType, res
   const parts: PartMeshes[] = []
   const meshes: THREE.Mesh[] = []
   const outlines: THREE.LineSegments[] = []
+  const grids: THREE.LineSegments[] = []
   const info = RESOLUTIONS[resolution]
 
   for (const part of PART_NAMES) {
     const transform = partTransform(part, model)
-    const entry: PartMeshes = { part, base: null, overlay: null, outline: null }
+    const entry: PartMeshes = { part, base: null, overlay: null, outline: null, baseGrid: null, overlayGrid: null }
 
     const baseGeom = buildPartGeometry(part, 'base', model, resolution, info.width, info.height)
     if (baseGeom != null) {
-      const mesh = new THREE.Mesh(baseGeom, material)
+      const mesh = new THREE.Mesh(baseGeom.geometry, material)
       mesh.position.set(transform.center.x, transform.center.y, transform.center.z)
       mesh.userData = { part, layer: 'base' as LayerName }
       group.add(mesh)
@@ -166,21 +198,39 @@ export function buildSkinModel (canvas: HTMLCanvasElement, model: ModelType, res
       // A faint always-visible wireframe so the body shape reads even
       // before anything has been painted (a fresh skin is fully
       // transparent and the textured mesh is invisible via alphaTest).
-      const outline = new THREE.LineSegments(new THREE.EdgesGeometry(baseGeom), outlineMaterial)
+      const outline = new THREE.LineSegments(new THREE.EdgesGeometry(baseGeom.geometry), outlineMaterial)
       outline.position.copy(mesh.position)
       group.add(outline)
       entry.outline = outline
       outlines.push(outline)
+
+      // Per-pixel grid on the base layer's surface, so individual skin
+      // pixels read as a grid — mirrors the 2D texture map's pixel grid.
+      const gridGeom = new THREE.BufferGeometry()
+      gridGeom.setAttribute('position', new THREE.Float32BufferAttribute(baseGeom.gridPositions, 3))
+      const baseGrid = new THREE.LineSegments(gridGeom, outlineMaterial)
+      baseGrid.position.copy(mesh.position)
+      group.add(baseGrid)
+      entry.baseGrid = baseGrid
+      grids.push(baseGrid)
     }
 
     const overlayGeom = buildPartGeometry(part, 'overlay', model, resolution, info.width, info.height)
     if (overlayGeom != null) {
-      const mesh = new THREE.Mesh(overlayGeom, overlayMaterial)
+      const mesh = new THREE.Mesh(overlayGeom.geometry, overlayMaterial)
       mesh.position.set(transform.center.x, transform.center.y, transform.center.z)
       mesh.userData = { part, layer: 'overlay' as LayerName }
       group.add(mesh)
       entry.overlay = mesh
       meshes.push(mesh)
+
+      const gridGeom = new THREE.BufferGeometry()
+      gridGeom.setAttribute('position', new THREE.Float32BufferAttribute(overlayGeom.gridPositions, 3))
+      const overlayGrid = new THREE.LineSegments(gridGeom, outlineMaterial)
+      overlayGrid.position.copy(mesh.position)
+      group.add(overlayGrid)
+      entry.overlayGrid = overlayGrid
+      grids.push(overlayGrid)
     }
 
     parts.push(entry)
@@ -197,6 +247,9 @@ export function buildSkinModel (canvas: HTMLCanvasElement, model: ModelType, res
       }
       for (const outline of outlines) {
         outline.geometry.dispose()
+      }
+      for (const grid of grids) {
+        grid.geometry.dispose()
       }
       material.dispose()
       overlayMaterial.dispose()
