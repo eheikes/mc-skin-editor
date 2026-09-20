@@ -1,11 +1,24 @@
-// Builds the 3D player model as a THREE.Group of per-part, per-layer meshes,
+// Builds the 3D player model as a Group of per-part, per-layer meshes,
 // each with hand-built UVs pointing at the correct region of the skin
 // texture atlas (see ../skin/uv.ts). Because every mesh's UV already points
 // at the right atlas pixels — including the legacy left-limb mirroring — a
 // raycast hit's interpolated UV converts directly to a texture pixel with no
 // further part/face bookkeeping needed.
 
-import * as THREE from 'three'
+import {
+  BufferGeometry,
+  CanvasTexture,
+  DoubleSide,
+  EdgesGeometry,
+  Float32BufferAttribute,
+  Group,
+  LineBasicMaterial,
+  LineSegments,
+  Mesh,
+  MeshBasicMaterial,
+  NearestFilter,
+  SRGBColorSpace
+} from 'three'
 import type { FaceName, LayerName, ModelType, PartName, ResolutionId } from '../skin/types'
 import { PART_NAMES, partDims, renderFaceSource, type FaceRect } from '../skin/uv'
 import { partTransform, OVERLAY_INSET } from '../skin/layout'
@@ -13,30 +26,30 @@ import { RESOLUTIONS } from '../skin/resolutions'
 
 export interface PartMeshes {
   part: PartName
-  base: THREE.Mesh | null
-  overlay: THREE.Mesh | null
-  outline: THREE.LineSegments | null
-  baseGrid: THREE.LineSegments | null
-  overlayGrid: THREE.LineSegments | null
+  base: Mesh | null
+  overlay: Mesh | null
+  outline: LineSegments | null
+  baseGrid: LineSegments | null
+  overlayGrid: LineSegments | null
   /** Invisible depth-only twin of `base`, so unpainted (fully transparent) skin
    *  pixels still block whatever is behind them — the opposite wall of the same
    *  box, other parts, or their grid/outline lines — instead of acting as a
    *  see-through hole into the model's interior. */
-  baseOccluder: THREE.Mesh | null
+  baseOccluder: Mesh | null
   /** Same trick as `baseOccluder`, but for the overlay layer. Only meant to be
    *  shown when the base layer isn't backstopping it (i.e. the base layer is
    *  toggled off) — otherwise it would block the base layer from showing
    *  through the overlay's legitimate transparent areas (hair through a gap
    *  in a hat, skin through a sleeve, etc). */
-  overlayOccluder: THREE.Mesh | null
+  overlayOccluder: Mesh | null
 }
 
 export interface SkinModel {
-  group: THREE.Group
+  group: Group
   parts: PartMeshes[]
-  texture: THREE.CanvasTexture
+  texture: CanvasTexture
   /** All meshes, for raycasting. */
-  meshes: THREE.Mesh[]
+  meshes: Mesh[]
   dispose: () => void
 }
 
@@ -90,7 +103,7 @@ function addFaceGrid (
 }
 
 interface PartGeometry {
-  geometry: THREE.BufferGeometry
+  geometry: BufferGeometry
   gridPositions: number[]
 }
 
@@ -160,43 +173,43 @@ function buildPartGeometry (
 
   if (!any) return null
 
-  const geometry = new THREE.BufferGeometry()
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
-  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+  geometry.setAttribute('normal', new Float32BufferAttribute(normals, 3))
+  geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2))
   geometry.setIndex(indices)
   return { geometry, gridPositions }
 }
 
 export function buildSkinModel (canvas: HTMLCanvasElement, model: ModelType, resolution: ResolutionId): SkinModel {
-  const texture = new THREE.CanvasTexture(canvas)
+  const texture = new CanvasTexture(canvas)
   texture.flipY = false
-  texture.magFilter = THREE.NearestFilter
-  texture.minFilter = THREE.NearestFilter
+  texture.magFilter = NearestFilter
+  texture.minFilter = NearestFilter
   texture.generateMipmaps = false
-  texture.colorSpace = THREE.SRGBColorSpace
+  texture.colorSpace = SRGBColorSpace
 
-  const material = new THREE.MeshBasicMaterial({
+  const material = new MeshBasicMaterial({
     map: texture,
-    side: THREE.DoubleSide,
+    side: DoubleSide,
     alphaTest: 0.05,
     transparent: false
   })
   const overlayMaterial = material.clone()
   overlayMaterial.alphaTest = 0.05
-  const outlineMaterial = new THREE.LineBasicMaterial({ color: 0x8a8f99, transparent: true, opacity: 0.55 })
+  const outlineMaterial = new LineBasicMaterial({ color: 0x8a8f99, transparent: true, opacity: 0.55 })
   // Writes depth for every fragment of the base box regardless of the skin
   // texture's alpha, so unpainted (fully transparent) areas still block
   // whatever is behind them instead of turning into a see-through hole into
   // the model's interior. Never paints color, so it doesn't affect what the
   // textured meshes actually show.
-  const occluderMaterial = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true })
+  const occluderMaterial = new MeshBasicMaterial({ colorWrite: false, depthWrite: true })
 
-  const group = new THREE.Group()
+  const group = new Group()
   const parts: PartMeshes[] = []
-  const meshes: THREE.Mesh[] = []
-  const outlines: THREE.LineSegments[] = []
-  const grids: THREE.LineSegments[] = []
+  const meshes: Mesh[] = []
+  const outlines: LineSegments[] = []
+  const grids: LineSegments[] = []
   const info = RESOLUTIONS[resolution]
 
   for (const part of PART_NAMES) {
@@ -205,14 +218,14 @@ export function buildSkinModel (canvas: HTMLCanvasElement, model: ModelType, res
 
     const baseGeom = buildPartGeometry(part, 'base', model, resolution, info.width, info.height)
     if (baseGeom != null) {
-      const mesh = new THREE.Mesh(baseGeom.geometry, material)
+      const mesh = new Mesh(baseGeom.geometry, material)
       mesh.position.set(transform.center.x, transform.center.y, transform.center.z)
       mesh.userData = { part, layer: 'base' as LayerName }
       group.add(mesh)
       entry.base = mesh
       meshes.push(mesh)
 
-      const occluder = new THREE.Mesh(baseGeom.geometry, occluderMaterial)
+      const occluder = new Mesh(baseGeom.geometry, occluderMaterial)
       occluder.position.copy(mesh.position)
       group.add(occluder)
       entry.baseOccluder = occluder
@@ -221,7 +234,7 @@ export function buildSkinModel (canvas: HTMLCanvasElement, model: ModelType, res
       // has been painted (a fresh skin is fully transparent and the
       // textured mesh is invisible via alphaTest). Hidden along with the
       // rest of the base layer when that layer is toggled off.
-      const outline = new THREE.LineSegments(new THREE.EdgesGeometry(baseGeom.geometry), outlineMaterial)
+      const outline = new LineSegments(new EdgesGeometry(baseGeom.geometry), outlineMaterial)
       outline.position.copy(mesh.position)
       group.add(outline)
       entry.outline = outline
@@ -229,9 +242,9 @@ export function buildSkinModel (canvas: HTMLCanvasElement, model: ModelType, res
 
       // Per-pixel grid on the base layer's surface, so individual skin
       // pixels read as a grid — mirrors the 2D texture map's pixel grid.
-      const gridGeom = new THREE.BufferGeometry()
-      gridGeom.setAttribute('position', new THREE.Float32BufferAttribute(baseGeom.gridPositions, 3))
-      const baseGrid = new THREE.LineSegments(gridGeom, outlineMaterial)
+      const gridGeom = new BufferGeometry()
+      gridGeom.setAttribute('position', new Float32BufferAttribute(baseGeom.gridPositions, 3))
+      const baseGrid = new LineSegments(gridGeom, outlineMaterial)
       baseGrid.position.copy(mesh.position)
       group.add(baseGrid)
       entry.baseGrid = baseGrid
@@ -240,21 +253,21 @@ export function buildSkinModel (canvas: HTMLCanvasElement, model: ModelType, res
 
     const overlayGeom = buildPartGeometry(part, 'overlay', model, resolution, info.width, info.height)
     if (overlayGeom != null) {
-      const mesh = new THREE.Mesh(overlayGeom.geometry, overlayMaterial)
+      const mesh = new Mesh(overlayGeom.geometry, overlayMaterial)
       mesh.position.set(transform.center.x, transform.center.y, transform.center.z)
       mesh.userData = { part, layer: 'overlay' as LayerName }
       group.add(mesh)
       entry.overlay = mesh
       meshes.push(mesh)
 
-      const overlayOccluder = new THREE.Mesh(overlayGeom.geometry, occluderMaterial)
+      const overlayOccluder = new Mesh(overlayGeom.geometry, occluderMaterial)
       overlayOccluder.position.copy(mesh.position)
       group.add(overlayOccluder)
       entry.overlayOccluder = overlayOccluder
 
-      const gridGeom = new THREE.BufferGeometry()
-      gridGeom.setAttribute('position', new THREE.Float32BufferAttribute(overlayGeom.gridPositions, 3))
-      const overlayGrid = new THREE.LineSegments(gridGeom, outlineMaterial)
+      const gridGeom = new BufferGeometry()
+      gridGeom.setAttribute('position', new Float32BufferAttribute(overlayGeom.gridPositions, 3))
+      const overlayGrid = new LineSegments(gridGeom, outlineMaterial)
       overlayGrid.position.copy(mesh.position)
       group.add(overlayGrid)
       entry.overlayGrid = overlayGrid
