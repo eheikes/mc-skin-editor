@@ -1,7 +1,7 @@
 import { writable, type Writable } from 'svelte/store'
 import type { ModelType, ResolutionId, RGBA } from '../skin/types'
 import { RESOLUTIONS } from '../skin/resolutions'
-import { buildPixelIndex, mirrorPixel, type PixelLocation } from '../skin/uv'
+import { buildPixelIndex, mirrorPixel, storedFaceRect, type PixelLocation } from '../skin/uv'
 
 export interface SkinState {
   resolution: ResolutionId
@@ -164,6 +164,15 @@ function createSkinStore (): SkinStore {
       if (!inBounds(startX, startY)) return
       const target = readPixel(startX, startY)
       if (target.r === color.r && target.g === color.g && target.b === color.b && target.a === color.a) return
+      // Bound the fill to the clicked pixel's own face (and thus its layer)
+      // so it can't leak across the shared edges the box-UV layout packs
+      // faces along in the atlas.
+      const loc = pixelIndex.get(`${startX},${startY}`)
+      const bounds = loc != null ? storedFaceRect(loc.part, loc.layer, loc.face, current.model, current.resolution) : null
+      const minX = bounds != null ? bounds.x : 0
+      const minY = bounds != null ? bounds.y : 0
+      const maxX = bounds != null ? bounds.x + bounds.w - 1 : current.width - 1
+      const maxY = bounds != null ? bounds.y + bounds.h - 1 : current.height - 1
       bump(() => {
         const stack: Array<[number, number]> = [[startX, startY]]
         const w = current.width
@@ -173,7 +182,7 @@ function createSkinStore (): SkinStore {
           const next = stack.pop()
           if (next === undefined) break
           const [x, y] = next
-          if (x < 0 || y < 0 || x >= w || y >= h) continue
+          if (x < minX || y < minY || x > maxX || y > maxY) continue
           const vi = y * w + x
           if (visited[vi] !== 0) continue
           const p = readPixel(x, y)
