@@ -41,7 +41,7 @@
       const visible = parts[entry.part];
       if (entry.base) entry.base.visible = visible && layers.base;
       if (entry.overlay) entry.overlay.visible = visible && layers.overlay;
-      if (entry.outline) entry.outline.visible = visible;
+      if (entry.outline) entry.outline.visible = visible && layers.base;
       if (entry.baseGrid) entry.baseGrid.visible = visible && layers.base;
       if (entry.overlayGrid) entry.overlayGrid.visible = visible && layers.overlay;
       if (entry.baseOccluder) entry.baseOccluder.visible = visible && layers.base;

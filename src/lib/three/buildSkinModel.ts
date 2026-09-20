@@ -211,9 +211,10 @@ export function buildSkinModel (canvas: HTMLCanvasElement, model: ModelType, res
       group.add(occluder)
       entry.baseOccluder = occluder
 
-      // A faint always-visible wireframe so the body shape reads even
-      // before anything has been painted (a fresh skin is fully
-      // transparent and the textured mesh is invisible via alphaTest).
+      // A faint wireframe so the body shape reads even before anything
+      // has been painted (a fresh skin is fully transparent and the
+      // textured mesh is invisible via alphaTest). Hidden along with the
+      // rest of the base layer when that layer is toggled off.
       const outline = new THREE.LineSegments(new THREE.EdgesGeometry(baseGeom.geometry), outlineMaterial)
       outline.position.copy(mesh.position)
       group.add(outline)
