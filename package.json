@@ -2,6 +2,19 @@
   "name": "@eheikes/mc-skin-editor",
   "private": true,
   "version": "1.1.0",
+  "description": "Web-based skin editor for Minecraft",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eheikes/mc-skin-editor.git"
+  },
+  "keywords": [
+    "minecraft",
+    "skin",
+    "editor"
+  ],
+  "author": "Eric Heikes <eheikes@gmail.com>",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/eheikes/mc-skin-editor#readme",
   "type": "module",
   "scripts": {
     "dev": "vite",
