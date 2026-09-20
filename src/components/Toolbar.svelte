@@ -2,6 +2,7 @@
   import type { ToolId } from '../lib/skin/types';
   import { activeTool, brushSize, mirrorEnabled, MIN_BRUSH_SIZE, MAX_BRUSH_SIZE } from '../lib/stores/tool';
   import { canUndo, canRedo, undo, redo } from '../lib/stores/history';
+  import { ripple } from '../lib/actions/ripple';
 
   const tools: { id: ToolId; label: string; icon: string; hotkey: string }[] = [
     { id: 'pencil', label: 'Pencil', icon: '✏️', hotkey: 'B' },
@@ -50,8 +51,8 @@
   </label>
 
   <div class="row">
-    <button type="button" on:click={undo} disabled={!$canUndo} title="Undo (Ctrl+Z)">↶ Undo</button>
-    <button type="button" on:click={redo} disabled={!$canRedo} title="Redo (Ctrl+Y)">↷ Redo</button>
+    <button type="button" use:ripple on:click={undo} disabled={!$canUndo} title="Undo (Ctrl+Z)">↶ Undo</button>
+    <button type="button" use:ripple on:click={redo} disabled={!$canRedo} title="Redo (Ctrl+Y)">↷ Redo</button>
   </div>
 </div>
 

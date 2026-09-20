@@ -3,6 +3,7 @@
   import iro from '@jaames/iro';
   import { activeColorHex } from '../lib/stores/tool';
   import { adjustLightness, hexToRgb, LIGHTNESS_STEP } from '../lib/color';
+  import { ripple } from '../lib/actions/ripple';
 
   let wheelEl: HTMLDivElement;
   let picker: iro.ColorPicker | null = null;
@@ -104,8 +105,8 @@
   </div>
 
   <div class="lighten-darken">
-    <button type="button" on:click={darken} title="Darken color">Darken</button>
-    <button type="button" on:click={lighten} title="Lighten color">Lighten</button>
+    <button type="button" use:ripple on:click={darken} title="Darken color">Darken</button>
+    <button type="button" use:ripple on:click={lighten} title="Lighten color">Lighten</button>
   </div>
 </div>
 
