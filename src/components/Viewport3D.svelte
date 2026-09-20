@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import * as THREE from 'three';
+  import { Color, PerspectiveCamera, Raycaster, Scene, Vector2, Vector3, WebGLRenderer, type Mesh } from 'three';
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
   import { skinStore } from '../lib/stores/skin';
   import { layerVisibility, partVisibility } from '../lib/stores/visibility';
@@ -9,14 +9,14 @@
   import { applyToolAt, applyToolAlongLine, beginStroke, endStroke } from '../lib/paintController';
 
   let container: HTMLDivElement;
-  let renderer: THREE.WebGLRenderer;
-  let scene: THREE.Scene;
-  let camera: THREE.PerspectiveCamera;
+  let renderer: WebGLRenderer;
+  let scene: Scene;
+  let camera: PerspectiveCamera;
   let controls: OrbitControls;
   let sourceCanvas: HTMLCanvasElement;
   let sourceCtx: CanvasRenderingContext2D;
   let model: SkinModel | null = null;
-  let raycaster: THREE.Raycaster;
+  let raycaster: Raycaster;
   let painting = false;
   let lastPixel: { x: number; y: number } | null = null;
   let resizeObserver: ResizeObserver;
@@ -53,7 +53,7 @@
     renderNow();
   }
 
-  function visibleMeshes(): THREE.Mesh[] {
+  function visibleMeshes(): Mesh[] {
     if (!model) return [];
     return model.meshes.filter((m) => m.visible);
   }
@@ -100,9 +100,9 @@
     applyVisibility();
   }
 
-  function eventToNDC(e: PointerEvent): THREE.Vector2 {
+  function eventToNDC(e: PointerEvent): Vector2 {
     const rect = renderer.domElement.getBoundingClientRect();
-    return new THREE.Vector2(
+    return new Vector2(
       ((e.clientX - rect.left) / rect.width) * 2 - 1,
       -((e.clientY - rect.top) / rect.height) * 2 + 1
     );
@@ -148,7 +148,7 @@
     dolly(1.18);
   }
   function dolly(factor: number) {
-    const dir = new THREE.Vector3().subVectors(camera.position, controls.target);
+    const dir = new Vector3().subVectors(camera.position, controls.target);
     const dist = Math.max(MIN_DIST, Math.min(MAX_DIST, dir.length() * factor));
     dir.setLength(dist);
     camera.position.copy(controls.target).add(dir);
@@ -180,13 +180,13 @@
       sourceCanvas = document.createElement('canvas');
       sourceCtx = sourceCanvas.getContext('2d')!;
 
-      scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x2b2f36);
+      scene = new Scene();
+      scene.background = new Color(0x2b2f36);
 
-      camera = new THREE.PerspectiveCamera(35, 16 / 9, 1, 1000);
+      camera = new PerspectiveCamera(35, 16 / 9, 1, 1000);
       camera.position.set(45, 30, 70);
 
-      renderer = new THREE.WebGLRenderer({ antialias: true, failIfMajorPerformanceCaveat: false });
+      renderer = new WebGLRenderer({ antialias: true, failIfMajorPerformanceCaveat: false });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.setSize(300, 169);
       container.appendChild(renderer.domElement);
@@ -199,7 +199,7 @@
       controls.maxDistance = MAX_DIST;
       controls.update();
 
-      raycaster = new THREE.Raycaster();
+      raycaster = new Raycaster();
 
       rebuildModel();
       lastModel = `${$skinStore.model}:${$skinStore.resolution}`;

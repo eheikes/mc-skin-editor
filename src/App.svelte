@@ -11,11 +11,15 @@
   import ColorPicker from './components/ColorPicker.svelte';
   import Palette from './components/Palette.svelte';
   import VisibilityPanel from './components/VisibilityPanel.svelte';
-  import Viewport3D from './components/Viewport3D.svelte';
   import Canvas2D from './components/Canvas2D.svelte';
 
   let ready = false;
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
+
+  // Loaded via dynamic import (rather than a static import) so the three.js-based
+  // 3D viewport — by far the largest chunk of the app's JS — is split into its own
+  // chunk and only fetched once the app is actually ready to show it.
+  const viewport3DModule = import('./components/Viewport3D.svelte');
 
   onMount(() => {
     ensureInitialSkin().then(() => {
@@ -89,7 +93,9 @@
 
     <main class="viewport-area">
       {#if ready}
-        <Viewport3D />
+        {#await viewport3DModule then { default: Viewport3D }}
+          <Viewport3D />
+        {/await}
       {/if}
     </main>
 
