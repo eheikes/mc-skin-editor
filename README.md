@@ -2,6 +2,8 @@
 
 A single-page 3D editor for Minecraft player skins, built with Svelte 5, TypeScript, Vite, and three.js. Everything runs client-side — skins, palette, and undo history live in your browser's `localStorage`, no server or account needed.
 
+> **Try it out at [skincrafter.io](https://skincrafter.io).**
+
 ## Features
 
 - **Resolutions**: Legacy (64×32), Standard (64×64), High (128×128)
