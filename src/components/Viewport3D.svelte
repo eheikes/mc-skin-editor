@@ -45,6 +45,10 @@
       if (entry.baseGrid) entry.baseGrid.visible = visible && layers.base;
       if (entry.overlayGrid) entry.overlayGrid.visible = visible && layers.overlay;
       if (entry.baseOccluder) entry.baseOccluder.visible = visible && layers.base;
+      // Only self-occludes when the base layer isn't shown to backstop it —
+      // otherwise it would block the base layer from showing through the
+      // overlay's legitimate transparent areas.
+      if (entry.overlayOccluder) entry.overlayOccluder.visible = visible && layers.overlay && !layers.base;
     }
     renderNow();
   }

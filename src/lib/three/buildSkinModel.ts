@@ -23,6 +23,12 @@ export interface PartMeshes {
    *  box, other parts, or their grid/outline lines — instead of acting as a
    *  see-through hole into the model's interior. */
   baseOccluder: THREE.Mesh | null
+  /** Same trick as `baseOccluder`, but for the overlay layer. Only meant to be
+   *  shown when the base layer isn't backstopping it (i.e. the base layer is
+   *  toggled off) — otherwise it would block the base layer from showing
+   *  through the overlay's legitimate transparent areas (hair through a gap
+   *  in a hat, skin through a sleeve, etc). */
+  overlayOccluder: THREE.Mesh | null
 }
 
 export interface SkinModel {
@@ -195,7 +201,7 @@ export function buildSkinModel (canvas: HTMLCanvasElement, model: ModelType, res
 
   for (const part of PART_NAMES) {
     const transform = partTransform(part, model)
-    const entry: PartMeshes = { part, base: null, overlay: null, outline: null, baseGrid: null, overlayGrid: null, baseOccluder: null }
+    const entry: PartMeshes = { part, base: null, overlay: null, outline: null, baseGrid: null, overlayGrid: null, baseOccluder: null, overlayOccluder: null }
 
     const baseGeom = buildPartGeometry(part, 'base', model, resolution, info.width, info.height)
     if (baseGeom != null) {
@@ -240,6 +246,11 @@ export function buildSkinModel (canvas: HTMLCanvasElement, model: ModelType, res
       group.add(mesh)
       entry.overlay = mesh
       meshes.push(mesh)
+
+      const overlayOccluder = new THREE.Mesh(overlayGeom.geometry, occluderMaterial)
+      overlayOccluder.position.copy(mesh.position)
+      group.add(overlayOccluder)
+      entry.overlayOccluder = overlayOccluder
 
       const gridGeom = new THREE.BufferGeometry()
       gridGeom.setAttribute('position', new THREE.Float32BufferAttribute(overlayGeom.gridPositions, 3))
