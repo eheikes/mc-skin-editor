@@ -1,8 +1,10 @@
 # MC Skin Editor
 
-A single-page 3D editor for Minecraft player skins, built with Svelte 5, TypeScript, Vite, and three.js. Everything runs client-side — skins, palette, and undo history live in your browser's `localStorage`, no server or account needed.
+A free, single-page 3D editor for Minecraft player skins. Paint directly on the 3D model or the 2D texture map, right in your browser — no account or install needed.
 
 > **Try it out at [skincrafter.io](https://skincrafter.io).**
+
+This repository holds the single-page 3D editor for Minecraft player skins, built with Svelte 5, TypeScript, Vite, and three.js. Everything runs client-side — skins, palette, and undo history live in your browser's `localStorage`, no server or account needed.
 
 ## Features
 
