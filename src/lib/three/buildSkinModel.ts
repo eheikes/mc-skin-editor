@@ -18,6 +18,11 @@ export interface PartMeshes {
   outline: THREE.LineSegments | null
   baseGrid: THREE.LineSegments | null
   overlayGrid: THREE.LineSegments | null
+  /** Invisible depth-only twin of `base`, so unpainted (fully transparent) skin
+   *  pixels still block whatever is behind them — the opposite wall of the same
+   *  box, other parts, or their grid/outline lines — instead of acting as a
+   *  see-through hole into the model's interior. */
+  baseOccluder: THREE.Mesh | null
 }
 
 export interface SkinModel {
@@ -174,6 +179,12 @@ export function buildSkinModel (canvas: HTMLCanvasElement, model: ModelType, res
   const overlayMaterial = material.clone()
   overlayMaterial.alphaTest = 0.05
   const outlineMaterial = new THREE.LineBasicMaterial({ color: 0x8a8f99, transparent: true, opacity: 0.55 })
+  // Writes depth for every fragment of the base box regardless of the skin
+  // texture's alpha, so unpainted (fully transparent) areas still block
+  // whatever is behind them instead of turning into a see-through hole into
+  // the model's interior. Never paints color, so it doesn't affect what the
+  // textured meshes actually show.
+  const occluderMaterial = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true })
 
   const group = new THREE.Group()
   const parts: PartMeshes[] = []
@@ -184,7 +195,7 @@ export function buildSkinModel (canvas: HTMLCanvasElement, model: ModelType, res
 
   for (const part of PART_NAMES) {
     const transform = partTransform(part, model)
-    const entry: PartMeshes = { part, base: null, overlay: null, outline: null, baseGrid: null, overlayGrid: null }
+    const entry: PartMeshes = { part, base: null, overlay: null, outline: null, baseGrid: null, overlayGrid: null, baseOccluder: null }
 
     const baseGeom = buildPartGeometry(part, 'base', model, resolution, info.width, info.height)
     if (baseGeom != null) {
@@ -194,6 +205,11 @@ export function buildSkinModel (canvas: HTMLCanvasElement, model: ModelType, res
       group.add(mesh)
       entry.base = mesh
       meshes.push(mesh)
+
+      const occluder = new THREE.Mesh(baseGeom.geometry, occluderMaterial)
+      occluder.position.copy(mesh.position)
+      group.add(occluder)
+      entry.baseOccluder = occluder
 
       // A faint always-visible wireframe so the body shape reads even
       // before anything has been painted (a fresh skin is fully
@@ -254,6 +270,7 @@ export function buildSkinModel (canvas: HTMLCanvasElement, model: ModelType, res
       material.dispose()
       overlayMaterial.dispose()
       outlineMaterial.dispose()
+      occluderMaterial.dispose()
       texture.dispose()
     }
   }
