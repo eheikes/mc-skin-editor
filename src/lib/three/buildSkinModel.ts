@@ -5,58 +5,58 @@
 // raycast hit's interpolated UV converts directly to a texture pixel with no
 // further part/face bookkeeping needed.
 
-import * as THREE from 'three';
-import type { FaceName, LayerName, ModelType, PartName, ResolutionId } from '../skin/types';
-import { PART_NAMES, partDims, renderFaceSource, type FaceRect } from '../skin/uv';
-import { partTransform, OVERLAY_INSET } from '../skin/layout';
-import { RESOLUTIONS } from '../skin/resolutions';
+import * as THREE from 'three'
+import type { FaceName, LayerName, ModelType, PartName, ResolutionId } from '../skin/types'
+import { PART_NAMES, partDims, renderFaceSource, type FaceRect } from '../skin/uv'
+import { partTransform, OVERLAY_INSET } from '../skin/layout'
+import { RESOLUTIONS } from '../skin/resolutions'
 
 export interface PartMeshes {
-  part: PartName;
-  base: THREE.Mesh | null;
-  overlay: THREE.Mesh | null;
-  outline: THREE.LineSegments | null;
+  part: PartName
+  base: THREE.Mesh | null
+  overlay: THREE.Mesh | null
+  outline: THREE.LineSegments | null
 }
 
 export interface SkinModel {
-  group: THREE.Group;
-  parts: PartMeshes[];
-  texture: THREE.CanvasTexture;
+  group: THREE.Group
+  parts: PartMeshes[]
+  texture: THREE.CanvasTexture
   /** All meshes, for raycasting. */
-  meshes: THREE.Mesh[];
-  dispose(): void;
+  meshes: THREE.Mesh[]
+  dispose: () => void
 }
 
-type Corner = [number, number, number];
+type Corner = [number, number, number]
 
-function addFace(
+function addFace (
   positions: number[],
   normals: number[],
   uvs: number[],
   indices: number[],
-  corners: { tl: Corner; tr: Corner; bl: Corner; br: Corner },
+  corners: { tl: Corner, tr: Corner, bl: Corner, br: Corner },
   normal: Corner,
   rect: FaceRect,
   atlasW: number,
   atlasH: number,
   flipX: boolean
-) {
-  const base = positions.length / 3;
-  const u0 = rect.x / atlasW;
-  const u1 = (rect.x + rect.w) / atlasW;
-  const v0 = rect.y / atlasH;
-  const v1 = (rect.y + rect.h) / atlasH;
-  const uLeft = flipX ? u1 : u0;
-  const uRight = flipX ? u0 : u1;
+): void {
+  const base = positions.length / 3
+  const u0 = rect.x / atlasW
+  const u1 = (rect.x + rect.w) / atlasW
+  const v0 = rect.y / atlasH
+  const v1 = (rect.y + rect.h) / atlasH
+  const uLeft = flipX ? u1 : u0
+  const uRight = flipX ? u0 : u1
 
-  positions.push(...corners.tl, ...corners.tr, ...corners.bl, ...corners.br);
-  for (let i = 0; i < 4; i++) normals.push(...normal);
-  uvs.push(uLeft, v0, uRight, v0, uLeft, v1, uRight, v1);
-  indices.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
+  positions.push(...corners.tl, ...corners.tr, ...corners.bl, ...corners.br)
+  for (let i = 0; i < 4; i++) normals.push(...normal)
+  uvs.push(uLeft, v0, uRight, v0, uLeft, v1, uRight, v1)
+  indices.push(base, base + 2, base + 1, base + 1, base + 2, base + 3)
 }
 
 /** Builds one part's box geometry (base or inflated overlay), or null if this part/layer has no texture to show. */
-function buildPartGeometry(
+function buildPartGeometry (
   part: PartName,
   layer: LayerName,
   model: ModelType,
@@ -64,19 +64,19 @@ function buildPartGeometry(
   atlasW: number,
   atlasH: number
 ): THREE.BufferGeometry | null {
-  const dims = partDims(part, model);
-  const inset = layer === 'overlay' ? OVERLAY_INSET : 0;
-  const hx = dims.dx / 2 + inset;
-  const hy = dims.dy / 2 + inset;
-  const hz = dims.dz / 2 + inset;
+  const dims = partDims(part, model)
+  const inset = layer === 'overlay' ? OVERLAY_INSET : 0
+  const hx = dims.dx / 2 + inset
+  const hy = dims.dy / 2 + inset
+  const hz = dims.dz / 2 + inset
 
-  const positions: number[] = [];
-  const normals: number[] = [];
-  const uvs: number[] = [];
-  const indices: number[] = [];
-  let any = false;
+  const positions: number[] = []
+  const normals: number[] = []
+  const uvs: number[] = []
+  const indices: number[] = []
+  let any = false
 
-  const faces: { face: FaceName; normal: Corner; corners: { tl: Corner; tr: Corner; bl: Corner; br: Corner } }[] = [
+  const faces: Array<{ face: FaceName, normal: Corner, corners: { tl: Corner, tr: Corner, bl: Corner, br: Corner } }> = [
     {
       face: 'front',
       normal: [0, 0, 1],
@@ -107,83 +107,83 @@ function buildPartGeometry(
       normal: [0, -1, 0],
       corners: { tl: [-hx, -hy, hz], tr: [hx, -hy, hz], bl: [-hx, -hy, -hz], br: [hx, -hy, -hz] }
     }
-  ];
+  ]
 
   for (const f of faces) {
-    const source = renderFaceSource(part, layer, f.face, model, resolution);
-    if (!source) continue;
-    any = true;
-    addFace(positions, normals, uvs, indices, f.corners, f.normal, source.rect, atlasW, atlasH, source.flipX);
+    const source = renderFaceSource(part, layer, f.face, model, resolution)
+    if (source == null) continue
+    any = true
+    addFace(positions, normals, uvs, indices, f.corners, f.normal, source.rect, atlasW, atlasH, source.flipX)
   }
 
-  if (!any) return null;
+  if (!any) return null
 
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geometry.setIndex(indices);
-  return geometry;
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+  geometry.setIndex(indices)
+  return geometry
 }
 
-export function buildSkinModel(canvas: HTMLCanvasElement, model: ModelType, resolution: ResolutionId): SkinModel {
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.flipY = false;
-  texture.magFilter = THREE.NearestFilter;
-  texture.minFilter = THREE.NearestFilter;
-  texture.generateMipmaps = false;
-  texture.colorSpace = THREE.SRGBColorSpace;
+export function buildSkinModel (canvas: HTMLCanvasElement, model: ModelType, resolution: ResolutionId): SkinModel {
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.flipY = false
+  texture.magFilter = THREE.NearestFilter
+  texture.minFilter = THREE.NearestFilter
+  texture.generateMipmaps = false
+  texture.colorSpace = THREE.SRGBColorSpace
 
   const material = new THREE.MeshBasicMaterial({
     map: texture,
     side: THREE.DoubleSide,
     alphaTest: 0.05,
     transparent: false
-  });
-  const overlayMaterial = material.clone();
-  overlayMaterial.alphaTest = 0.05;
-  const outlineMaterial = new THREE.LineBasicMaterial({ color: 0x8a8f99, transparent: true, opacity: 0.55 });
+  })
+  const overlayMaterial = material.clone()
+  overlayMaterial.alphaTest = 0.05
+  const outlineMaterial = new THREE.LineBasicMaterial({ color: 0x8a8f99, transparent: true, opacity: 0.55 })
 
-  const group = new THREE.Group();
-  const parts: PartMeshes[] = [];
-  const meshes: THREE.Mesh[] = [];
-  const outlines: THREE.LineSegments[] = [];
-  const info = RESOLUTIONS[resolution];
+  const group = new THREE.Group()
+  const parts: PartMeshes[] = []
+  const meshes: THREE.Mesh[] = []
+  const outlines: THREE.LineSegments[] = []
+  const info = RESOLUTIONS[resolution]
 
   for (const part of PART_NAMES) {
-    const transform = partTransform(part, model);
-    const entry: PartMeshes = { part, base: null, overlay: null, outline: null };
+    const transform = partTransform(part, model)
+    const entry: PartMeshes = { part, base: null, overlay: null, outline: null }
 
-    const baseGeom = buildPartGeometry(part, 'base', model, resolution, info.width, info.height);
-    if (baseGeom) {
-      const mesh = new THREE.Mesh(baseGeom, material);
-      mesh.position.set(transform.center.x, transform.center.y, transform.center.z);
-      mesh.userData = { part, layer: 'base' as LayerName };
-      group.add(mesh);
-      entry.base = mesh;
-      meshes.push(mesh);
+    const baseGeom = buildPartGeometry(part, 'base', model, resolution, info.width, info.height)
+    if (baseGeom != null) {
+      const mesh = new THREE.Mesh(baseGeom, material)
+      mesh.position.set(transform.center.x, transform.center.y, transform.center.z)
+      mesh.userData = { part, layer: 'base' as LayerName }
+      group.add(mesh)
+      entry.base = mesh
+      meshes.push(mesh)
 
       // A faint always-visible wireframe so the body shape reads even
       // before anything has been painted (a fresh skin is fully
       // transparent and the textured mesh is invisible via alphaTest).
-      const outline = new THREE.LineSegments(new THREE.EdgesGeometry(baseGeom), outlineMaterial);
-      outline.position.copy(mesh.position);
-      group.add(outline);
-      entry.outline = outline;
-      outlines.push(outline);
+      const outline = new THREE.LineSegments(new THREE.EdgesGeometry(baseGeom), outlineMaterial)
+      outline.position.copy(mesh.position)
+      group.add(outline)
+      entry.outline = outline
+      outlines.push(outline)
     }
 
-    const overlayGeom = buildPartGeometry(part, 'overlay', model, resolution, info.width, info.height);
-    if (overlayGeom) {
-      const mesh = new THREE.Mesh(overlayGeom, overlayMaterial);
-      mesh.position.set(transform.center.x, transform.center.y, transform.center.z);
-      mesh.userData = { part, layer: 'overlay' as LayerName };
-      group.add(mesh);
-      entry.overlay = mesh;
-      meshes.push(mesh);
+    const overlayGeom = buildPartGeometry(part, 'overlay', model, resolution, info.width, info.height)
+    if (overlayGeom != null) {
+      const mesh = new THREE.Mesh(overlayGeom, overlayMaterial)
+      mesh.position.set(transform.center.x, transform.center.y, transform.center.z)
+      mesh.userData = { part, layer: 'overlay' as LayerName }
+      group.add(mesh)
+      entry.overlay = mesh
+      meshes.push(mesh)
     }
 
-    parts.push(entry);
+    parts.push(entry)
   }
 
   return {
@@ -191,17 +191,17 @@ export function buildSkinModel(canvas: HTMLCanvasElement, model: ModelType, reso
     parts,
     texture,
     meshes,
-    dispose() {
+    dispose () {
       for (const mesh of meshes) {
-        mesh.geometry.dispose();
+        mesh.geometry.dispose()
       }
       for (const outline of outlines) {
-        outline.geometry.dispose();
+        outline.geometry.dispose()
       }
-      material.dispose();
-      overlayMaterial.dispose();
-      outlineMaterial.dispose();
-      texture.dispose();
+      material.dispose()
+      overlayMaterial.dispose()
+      outlineMaterial.dispose()
+      texture.dispose()
     }
-  };
+  }
 }

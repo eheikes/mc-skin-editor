@@ -1,31 +1,31 @@
-import { writable } from 'svelte/store';
-import type { ModelType, ResolutionId, RGBA } from '../skin/types';
-import { RESOLUTIONS } from '../skin/resolutions';
-import { buildPixelIndex, mirrorPixel, type PixelLocation } from '../skin/uv';
+import { writable, type Writable } from 'svelte/store'
+import type { ModelType, ResolutionId, RGBA } from '../skin/types'
+import { RESOLUTIONS } from '../skin/resolutions'
+import { buildPixelIndex, mirrorPixel, type PixelLocation } from '../skin/uv'
 
 export interface SkinState {
-  resolution: ResolutionId;
-  model: ModelType;
-  width: number;
-  height: number;
-  pixels: Uint8ClampedArray; // RGBA, row-major
-  version: number;
+  resolution: ResolutionId
+  model: ModelType
+  width: number
+  height: number
+  pixels: Uint8ClampedArray // RGBA, row-major
+  version: number
 }
 
 export interface SkinSnapshot {
-  resolution: ResolutionId;
-  model: ModelType;
-  width: number;
-  height: number;
-  pixels: Uint8ClampedArray;
+  resolution: ResolutionId
+  model: ModelType
+  width: number
+  height: number
+  pixels: Uint8ClampedArray
 }
 
-function blankPixels(width: number, height: number): Uint8ClampedArray {
-  return new Uint8ClampedArray(width * height * 4);
+function blankPixels (width: number, height: number): Uint8ClampedArray {
+  return new Uint8ClampedArray(width * height * 4)
 }
 
-function blankState(resolution: ResolutionId, model: ModelType): SkinState {
-  const info = RESOLUTIONS[resolution];
+function blankState (resolution: ResolutionId, model: ModelType): SkinState {
+  const info = RESOLUTIONS[resolution]
   return {
     resolution,
     model,
@@ -33,146 +33,163 @@ function blankState(resolution: ResolutionId, model: ModelType): SkinState {
     height: info.height,
     pixels: blankPixels(info.width, info.height),
     version: 0
-  };
+  }
 }
 
 /** Nearest-neighbor resample of an RGBA buffer to new dimensions. */
-function resample(src: Uint8ClampedArray, sw: number, sh: number, dw: number, dh: number): Uint8ClampedArray {
-  const dst = blankPixels(dw, dh);
+function resample (src: Uint8ClampedArray, sw: number, sh: number, dw: number, dh: number): Uint8ClampedArray {
+  const dst = blankPixels(dw, dh)
   for (let y = 0; y < dh; y++) {
-    const sy = Math.min(sh - 1, Math.floor((y * sh) / dh));
+    const sy = Math.min(sh - 1, Math.floor((y * sh) / dh))
     for (let x = 0; x < dw; x++) {
-      const sx = Math.min(sw - 1, Math.floor((x * sw) / dw));
-      const si = (sy * sw + sx) * 4;
-      const di = (y * dw + x) * 4;
-      dst[di] = src[si];
-      dst[di + 1] = src[si + 1];
-      dst[di + 2] = src[si + 2];
-      dst[di + 3] = src[si + 3];
+      const sx = Math.min(sw - 1, Math.floor((x * sw) / dw))
+      const si = (sy * sw + sx) * 4
+      const di = (y * dw + x) * 4
+      dst[di] = src[si]
+      dst[di + 1] = src[si + 1]
+      dst[di + 2] = src[si + 2]
+      dst[di + 3] = src[si + 3]
     }
   }
-  return dst;
+  return dst
 }
 
-function createSkinStore() {
-  const { subscribe, update, set } = writable<SkinState>(blankState('standard', 'classic'));
+export interface SkinStore {
+  subscribe: Writable<SkinState>['subscribe']
+  newBlank: (resolution: ResolutionId, model: ModelType) => void
+  setResolution: (resolution: ResolutionId) => void
+  setModel: (model: ModelType) => void
+  getPixel: (x: number, y: number) => RGBA
+  inBounds: (x: number, y: number) => boolean
+  paintBrush: (cx: number, cy: number, size: number, color: RGBA, mirror: boolean) => void
+  floodFill: (startX: number, startY: number, color: RGBA, mirror: boolean) => void
+  loadImageData: (imageData: ImageData, resolution: ResolutionId, model: ModelType) => void
+  snapshot: () => SkinSnapshot
+  restoreSnapshot: (snap: SkinSnapshot) => void
+  toImageData: () => ImageData
+}
 
-  let current: SkinState = blankState('standard', 'classic');
-  subscribe((s) => (current = s));
+function createSkinStore (): SkinStore {
+  const { subscribe, update, set } = writable<SkinState>(blankState('standard', 'classic'))
 
-  let pixelIndex: Map<string, PixelLocation> = buildPixelIndex(current.model, current.resolution);
+  let current: SkinState = blankState('standard', 'classic')
+  subscribe((s) => (current = s))
 
-  function rebuildIndex() {
-    pixelIndex = buildPixelIndex(current.model, current.resolution);
+  let pixelIndex: Map<string, PixelLocation> = buildPixelIndex(current.model, current.resolution)
+
+  function rebuildIndex (): void {
+    pixelIndex = buildPixelIndex(current.model, current.resolution)
   }
 
-  function bump(mutator: (s: SkinState) => void) {
+  function bump (mutator: (s: SkinState) => void): void {
     update((s) => {
-      mutator(s);
-      return { ...s, version: s.version + 1 };
-    });
+      mutator(s)
+      return { ...s, version: s.version + 1 }
+    })
   }
 
-  function inBounds(x: number, y: number): boolean {
-    return x >= 0 && y >= 0 && x < current.width && y < current.height;
+  function inBounds (x: number, y: number): boolean {
+    return x >= 0 && y >= 0 && x < current.width && y < current.height
   }
 
-  function readPixel(x: number, y: number): RGBA {
-    const i = (y * current.width + x) * 4;
-    const p = current.pixels;
-    return { r: p[i], g: p[i + 1], b: p[i + 2], a: p[i + 3] };
+  function readPixel (x: number, y: number): RGBA {
+    const i = (y * current.width + x) * 4
+    const p = current.pixels
+    return { r: p[i], g: p[i + 1], b: p[i + 2], a: p[i + 3] }
   }
 
-  function writePixel(x: number, y: number, color: RGBA) {
-    if (!inBounds(x, y)) return;
-    const i = (y * current.width + x) * 4;
-    current.pixels[i] = color.r;
-    current.pixels[i + 1] = color.g;
-    current.pixels[i + 2] = color.b;
-    current.pixels[i + 3] = color.a;
+  function writePixel (x: number, y: number, color: RGBA): void {
+    if (!inBounds(x, y)) return
+    const i = (y * current.width + x) * 4
+    current.pixels[i] = color.r
+    current.pixels[i + 1] = color.g
+    current.pixels[i + 2] = color.b
+    current.pixels[i + 3] = color.a
   }
 
   return {
     subscribe,
 
-    newBlank(resolution: ResolutionId, model: ModelType) {
-      set(blankState(resolution, model));
-      rebuildIndex();
+    newBlank (resolution: ResolutionId, model: ModelType) {
+      set(blankState(resolution, model))
+      rebuildIndex()
     },
 
-    setResolution(resolution: ResolutionId) {
-      if (resolution === current.resolution) return;
-      const info = RESOLUTIONS[resolution];
+    setResolution (resolution: ResolutionId) {
+      if (resolution === current.resolution) return
+      const info = RESOLUTIONS[resolution]
       bump((s) => {
-        s.pixels = resample(s.pixels, s.width, s.height, info.width, info.height);
-        s.width = info.width;
-        s.height = info.height;
-        s.resolution = resolution;
-      });
-      rebuildIndex();
+        s.pixels = resample(s.pixels, s.width, s.height, info.width, info.height)
+        s.width = info.width
+        s.height = info.height
+        s.resolution = resolution
+      })
+      rebuildIndex()
     },
 
-    setModel(model: ModelType) {
-      if (model === current.model) return;
+    setModel (model: ModelType) {
+      if (model === current.model) return
       bump((s) => {
-        s.model = model;
-      });
-      rebuildIndex();
+        s.model = model
+      })
+      rebuildIndex()
     },
 
-    getPixel(x: number, y: number): RGBA {
-      return readPixel(x, y);
+    getPixel (x: number, y: number): RGBA {
+      return readPixel(x, y)
     },
 
     inBounds,
 
     /** Paints a square brush centered on (cx, cy). size=1 -> 1x1, size=2 -> 3x3, etc. */
-    paintBrush(cx: number, cy: number, size: number, color: RGBA, mirror: boolean) {
-      const radius = size - 1;
+    paintBrush (cx: number, cy: number, size: number, color: RGBA, mirror: boolean) {
+      const radius = size - 1
       bump(() => {
         for (let dy = -radius; dy <= radius; dy++) {
           for (let dx = -radius; dx <= radius; dx++) {
-            const x = cx + dx;
-            const y = cy + dy;
-            if (!inBounds(x, y)) continue;
-            writePixel(x, y, color);
+            const x = cx + dx
+            const y = cy + dy
+            if (!inBounds(x, y)) continue
+            writePixel(x, y, color)
             if (mirror) {
-              const m = mirrorPixel(x, y, current.model, current.resolution, pixelIndex);
-              if (m) writePixel(m.x, m.y, color);
+              const m = mirrorPixel(x, y, current.model, current.resolution, pixelIndex)
+              if (m != null) writePixel(m.x, m.y, color)
             }
           }
         }
-      });
+      })
     },
 
-    floodFill(startX: number, startY: number, color: RGBA, mirror: boolean) {
-      if (!inBounds(startX, startY)) return;
-      const target = readPixel(startX, startY);
-      if (target.r === color.r && target.g === color.g && target.b === color.b && target.a === color.a) return;
+    floodFill (startX: number, startY: number, color: RGBA, mirror: boolean) {
+      if (!inBounds(startX, startY)) return
+      const target = readPixel(startX, startY)
+      if (target.r === color.r && target.g === color.g && target.b === color.b && target.a === color.a) return
       bump(() => {
-        const stack: [number, number][] = [[startX, startY]];
-        const w = current.width;
-        const h = current.height;
-        const visited = new Uint8Array(w * h);
-        while (stack.length) {
-          const [x, y] = stack.pop()!;
-          if (x < 0 || y < 0 || x >= w || y >= h) continue;
-          const vi = y * w + x;
-          if (visited[vi]) continue;
-          const p = readPixel(x, y);
-          if (p.r !== target.r || p.g !== target.g || p.b !== target.b || p.a !== target.a) continue;
-          visited[vi] = 1;
-          writePixel(x, y, color);
+        const stack: Array<[number, number]> = [[startX, startY]]
+        const w = current.width
+        const h = current.height
+        const visited = new Uint8Array(w * h)
+        while (stack.length > 0) {
+          const next = stack.pop()
+          if (next === undefined) break
+          const [x, y] = next
+          if (x < 0 || y < 0 || x >= w || y >= h) continue
+          const vi = y * w + x
+          if (visited[vi] !== 0) continue
+          const p = readPixel(x, y)
+          if (p.r !== target.r || p.g !== target.g || p.b !== target.b || p.a !== target.a) continue
+          visited[vi] = 1
+          writePixel(x, y, color)
           if (mirror) {
-            const m = mirrorPixel(x, y, current.model, current.resolution, pixelIndex);
-            if (m) writePixel(m.x, m.y, color);
+            const m = mirrorPixel(x, y, current.model, current.resolution, pixelIndex)
+            if (m != null) writePixel(m.x, m.y, color)
           }
-          stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+          stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1])
         }
-      });
+      })
     },
 
-    loadImageData(imageData: ImageData, resolution: ResolutionId, model: ModelType) {
+    loadImageData (imageData: ImageData, resolution: ResolutionId, model: ModelType) {
       set({
         resolution,
         model,
@@ -180,21 +197,21 @@ function createSkinStore() {
         height: imageData.height,
         pixels: Uint8ClampedArray.from(imageData.data),
         version: 0
-      });
-      rebuildIndex();
+      })
+      rebuildIndex()
     },
 
-    snapshot(): SkinSnapshot {
+    snapshot (): SkinSnapshot {
       return {
         resolution: current.resolution,
         model: current.model,
         width: current.width,
         height: current.height,
         pixels: current.pixels.slice()
-      };
+      }
     },
 
-    restoreSnapshot(snap: SkinSnapshot) {
+    restoreSnapshot (snap: SkinSnapshot) {
       set({
         resolution: snap.resolution,
         model: snap.model,
@@ -202,14 +219,14 @@ function createSkinStore() {
         height: snap.height,
         pixels: snap.pixels.slice(),
         version: 0
-      });
-      rebuildIndex();
+      })
+      rebuildIndex()
     },
 
-    toImageData(): ImageData {
-      return new ImageData(new Uint8ClampedArray(current.pixels), current.width, current.height);
+    toImageData (): ImageData {
+      return new ImageData(new Uint8ClampedArray(current.pixels), current.width, current.height)
     }
-  };
+  }
 }
 
-export const skinStore = createSkinStore();
+export const skinStore = createSkinStore()
