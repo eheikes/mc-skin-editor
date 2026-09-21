@@ -16,12 +16,14 @@
   import { fileToImageData, downloadImageData } from '../lib/png';
   import type { ModelType, ResolutionId } from '../lib/skin/types';
   import SkinDialog from './SkinDialog.svelte';
+  import AboutDialog from './AboutDialog.svelte';
 
   let fileInput: HTMLInputElement;
   let dialogMode: 'new' | 'import' | null = null;
   let pendingImport: { imageData: ImageData; resolution: ResolutionId; name: string } | null = null;
   let renaming = false;
   let renameValue = '';
+  let aboutOpen = false;
 
   $: currentRecord = $savedSkins.find((s) => s.id === $currentSkinId) ?? null;
 
@@ -150,6 +152,8 @@
     <button type="button" class="primary" on:click={exportPng}>Export PNG</button>
     <span class="sep"></span>
     <button type="button" class="danger" on:click={resetSkin}>Reset Skin</button>
+    <span class="sep"></span>
+    <button type="button" class="icon-btn about-btn" title="About" on:click={() => (aboutOpen = true)}>ⓘ</button>
   </div>
 
   <input
@@ -179,6 +183,10 @@
     onConfirm={confirmImport}
     onCancel={closeDialog}
   />
+{/if}
+
+{#if aboutOpen}
+  <AboutDialog onClose={() => (aboutOpen = false)} />
 {/if}
 
 <style>
@@ -214,6 +222,10 @@
     background: var(--panel-bg, #333);
     color: var(--text, #eee);
     cursor: pointer;
+  }
+  .about-btn {
+    padding: 5px 12px;
+    font-size: 18px;
   }
   .actions {
     display: flex;
