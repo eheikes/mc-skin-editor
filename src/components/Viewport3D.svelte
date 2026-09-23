@@ -5,7 +5,7 @@
   import { skinStore } from '../lib/stores/skin';
   import { layerVisibility, partVisibility } from '../lib/stores/visibility';
   import { buildSkinModel, type SkinModel } from '../lib/three/buildSkinModel';
-  import { pickPixel } from '../lib/three/raycastPixel';
+  import { pickPixel, type PixelHit } from '../lib/three/raycastPixel';
   import { applyToolAt, applyToolAlongLine, beginStroke, endStroke } from '../lib/paintController';
 
   let container: HTMLDivElement;
@@ -18,7 +18,7 @@
   let model: SkinModel | null = null;
   let raycaster: Raycaster;
   let painting = false;
-  let lastPixel: { x: number; y: number } | null = null;
+  let lastPixel: PixelHit | null = null;
   let resizeObserver: ResizeObserver;
   let frameId = 0;
   let tickFallback: ReturnType<typeof setInterval> | undefined;
@@ -108,7 +108,7 @@
     );
   }
 
-  function hitTest(e: PointerEvent): { x: number; y: number } | null {
+  function hitTest(e: PointerEvent): PixelHit | null {
     raycaster.setFromCamera(eventToNDC(e), camera);
     const { width, height } = $skinStore;
     return pickPixel(raycaster, visibleMeshes(), width, height);
@@ -128,7 +128,12 @@
     if (!painting) return;
     const hit = hitTest(e);
     if (!hit) return;
-    if (lastPixel) applyToolAlongLine(lastPixel.x, lastPixel.y, hit.x, hit.y);
+    // The atlas regions for different body parts aren't adjacent, so a
+    // straight texture-space line between a hit on one part and a hit on
+    // another would cut through unrelated pixels instead of following what
+    // the cursor actually crossed on the model. Only interpolate within the
+    // same part; a jump to a new part just paints at the new hit.
+    if (lastPixel && lastPixel.part === hit.part) applyToolAlongLine(lastPixel.x, lastPixel.y, hit.x, hit.y);
     else applyToolAt(hit.x, hit.y);
     lastPixel = hit;
   }
