@@ -8,6 +8,7 @@ export interface PaletteStore {
   subscribe: Writable<Array<string | null>>['subscribe']
   setSlot: (index: number, color: string) => void
   clearSlot: (index: number) => void
+  clearAll: () => void
   addToFirstEmpty: (color: string) => number
 }
 
@@ -39,6 +40,9 @@ function createPaletteStore (): PaletteStore {
         copy[index] = null
         return copy
       })
+    },
+    clearAll () {
+      update(() => new Array(SLOT_COUNT).fill(null))
     },
     /** Stores `color` in the first empty slot, or does nothing if the palette is full. Returns the slot index used, or -1. */
     addToFirstEmpty (color: string): number {
