@@ -11,6 +11,13 @@
     }
   }
 
+  $: isEmpty = $paletteStore.every((c) => !c);
+
+  function clearAll() {
+    if (!confirm('Clear all palette slots? This cannot be undone.')) return;
+    paletteStore.clearAll();
+  }
+
   function onSlotContextMenu(e: MouseEvent, index: number) {
     e.preventDefault();
     paletteStore.setSlot(index, $activeColorHex);
@@ -47,7 +54,12 @@
 </script>
 
 <div class="palette">
-  <div class="palette-label">Palette</div>
+  <div class="header">
+    <div class="palette-label">Palette</div>
+    <button type="button" class="clear-btn" on:click={clearAll} disabled={isEmpty} title="Clear all palette slots">
+      Clear
+    </button>
+  </div>
   <div class="palette-grid">
     {#each Array(SLOT_COUNT) as _, i}
       <button
@@ -75,6 +87,27 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+  }
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .clear-btn {
+    padding: 2px 0 2px 6px;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    color: var(--accent, #7fb0ff);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .clear-btn:hover:not(:disabled) {
+    text-decoration: underline;
+  }
+  .clear-btn:disabled {
+    color: var(--text-dim, #9a9ba3);
+    cursor: default;
   }
   .palette-label {
     font-size: 12px;
@@ -135,6 +168,11 @@
     }
     .palette-grid {
       gap: 8px;
+    }
+    .clear-btn {
+      min-height: 36px;
+      padding: 0 0 0 10px;
+      font-size: 14px;
     }
   }
 </style>

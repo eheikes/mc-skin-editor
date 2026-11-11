@@ -107,6 +107,7 @@
   }
   input[type='range'] {
     flex: 1;
+    min-width: 0;
   }
   .mirror-toggle {
     display: flex;
