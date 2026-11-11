@@ -50,7 +50,7 @@
     Mirror (left ↔ right)
   </label>
 
-  <div class="row">
+  <div class="row history">
     <button type="button" use:ripple on:click={undo} disabled={!$canUndo} title="Undo (Ctrl+Z)">↶ Undo</button>
     <button type="button" use:ripple on:click={redo} disabled={!$canRedo} title="Redo (Ctrl+Y)">↷ Redo</button>
   </div>
@@ -131,5 +131,45 @@
   .row button:disabled {
     opacity: 0.4;
     cursor: default;
+  }
+
+  /* Wide pane (small-screen layout, portrait): tools in a single row. */
+  @container (min-width: 300px) {
+    .tool-group {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+
+  @media (pointer: coarse) {
+    .tool-btn {
+      min-height: 56px;
+      font-size: 12px;
+    }
+    .tool-btn .icon {
+      font-size: 22px;
+    }
+    input[type='range'] {
+      min-height: 32px;
+    }
+    .mirror-toggle {
+      min-height: 40px;
+      font-size: 14px;
+    }
+    .mirror-toggle input {
+      width: 22px;
+      height: 22px;
+    }
+    .row button {
+      min-height: 44px;
+      font-size: 14px;
+    }
+  }
+
+  /* COMPACT layout — keep in sync with App.svelte. Undo/redo live in the
+     always-visible pane switcher there instead. */
+  @media (max-width: 1024px), (max-height: 640px) {
+    .history {
+      display: none;
+    }
   }
 </style>

@@ -15,6 +15,35 @@
     e.preventDefault();
     paletteStore.setSlot(index, $activeColorHex);
   }
+
+  // Touch has no right-click (and iOS never fires contextmenu), so a
+  // long-press overwrites the slot instead. The click that follows the
+  // long-press is swallowed so it doesn't immediately pick the color too.
+  const LONG_PRESS_MS = 500;
+  let pressTimer: ReturnType<typeof setTimeout> | undefined;
+  let longPressed = false;
+
+  function onSlotPointerDown(e: PointerEvent, index: number) {
+    longPressed = false;
+    if (e.pointerType !== 'touch') return;
+    pressTimer = setTimeout(() => {
+      longPressed = true;
+      paletteStore.setSlot(index, $activeColorHex);
+      navigator.vibrate?.(20);
+    }, LONG_PRESS_MS);
+  }
+
+  function cancelLongPress() {
+    clearTimeout(pressTimer);
+  }
+
+  function onClick(index: number) {
+    if (longPressed) {
+      longPressed = false;
+      return;
+    }
+    onSlotClick(index);
+  }
 </script>
 
 <div class="palette">
@@ -27,12 +56,18 @@
         class:empty={!$paletteStore[i]}
         style={$paletteStore[i] ? `background:${$paletteStore[i]};` : ''}
         title={$paletteStore[i] ? $paletteStore[i]! : 'Empty — click to store the current color'}
-        on:click={() => onSlotClick(i)}
+        on:click={() => onClick(i)}
         on:contextmenu={(e) => onSlotContextMenu(e, i)}
+        on:pointerdown={(e) => onSlotPointerDown(e, i)}
+        on:pointerup={cancelLongPress}
+        on:pointercancel={cancelLongPress}
+        on:pointerleave={cancelLongPress}
       ></button>
     {/each}
   </div>
-  <p class="hint">Click empty slot to save · right-click to overwrite</p>
+  <p class="hint">
+    Click empty slot to save · <span class="mouse-hint">right-click</span><span class="touch-hint">long-press</span> to overwrite
+  </p>
 </div>
 
 <style>
@@ -58,6 +93,8 @@
     border: 1px solid var(--border, #555);
     cursor: pointer;
     padding: 0;
+    -webkit-touch-callout: none;
+    user-select: none;
   }
   .slot.empty {
     background-image:
@@ -77,5 +114,27 @@
     font-size: 11px;
     opacity: 0.55;
     margin: 0;
+  }
+  .touch-hint {
+    display: none;
+  }
+
+  /* Wide pane (small-screen layout, portrait): two rows of slots. */
+  @container (min-width: 300px) {
+    .palette-grid {
+      grid-template-columns: repeat(8, 1fr);
+    }
+  }
+
+  @media (pointer: coarse) {
+    .mouse-hint {
+      display: none;
+    }
+    .touch-hint {
+      display: inline;
+    }
+    .palette-grid {
+      gap: 8px;
+    }
   }
 </style>
