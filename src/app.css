@@ -74,3 +74,10 @@ select {
     opacity: 0;
   }
 }
+
+/* Keep the page itself from rubber-banding or pull-to-refreshing on touch
+   devices; the app fills the viewport and never scrolls as a whole. */
+html,
+body {
+  overscroll-behavior: none;
+}

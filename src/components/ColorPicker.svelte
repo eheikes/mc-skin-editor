@@ -90,23 +90,25 @@
 
   <div class="wheel" bind:this={wheelEl}></div>
 
-  <div class="swatch-row">
-    <div class="swatch" style="background: {$activeColorHex};"></div>
-    <input
-      class="hex-input"
-      class:invalid={hexInvalid}
-      type="text"
-      maxlength="7"
-      bind:value={hexInput}
-      on:blur={commitHexInput}
-      on:keydown={onHexKeydown}
-      aria-label="Hex color"
-    />
-  </div>
+  <div class="controls">
+    <div class="swatch-row">
+      <div class="swatch" style="background: {$activeColorHex};"></div>
+      <input
+        class="hex-input"
+        class:invalid={hexInvalid}
+        type="text"
+        maxlength="7"
+        bind:value={hexInput}
+        on:blur={commitHexInput}
+        on:keydown={onHexKeydown}
+        aria-label="Hex color"
+      />
+    </div>
 
-  <div class="lighten-darken">
-    <button type="button" use:ripple on:click={darken} title="Darken color">Darken</button>
-    <button type="button" use:ripple on:click={lighten} title="Lighten color">Lighten</button>
+    <div class="lighten-darken">
+      <button type="button" use:ripple on:click={darken} title="Darken color">Darken</button>
+      <button type="button" use:ripple on:click={lighten} title="Lighten color">Lighten</button>
+    </div>
   </div>
 </div>
 
@@ -120,6 +122,12 @@
   .wheel {
     display: flex;
     justify-content: center;
+  }
+  .controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
   }
   .preset-row {
     display: flex;
@@ -193,5 +201,47 @@
   }
   .lighten-darken button:hover {
     background: var(--panel-bg-hover, #444);
+  }
+
+  /* Wide pane (small-screen layout, portrait): wheel on the left, the rest
+     stacked beside it, to keep the pane short. */
+  @container (min-width: 300px) {
+    .color-picker {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      grid-template-areas: 'wheel presets' 'wheel controls';
+      row-gap: 10px;
+      align-items: start;
+      column-gap: 16px;
+    }
+    .preset-row {
+      grid-area: presets;
+      max-width: 320px;
+    }
+    .wheel {
+      grid-area: wheel;
+    }
+    .controls {
+      grid-area: controls;
+      max-width: 320px;
+    }
+  }
+
+  @media (pointer: coarse) {
+    .preset-swatch {
+      height: 40px;
+    }
+    .swatch {
+      width: 40px;
+      height: 40px;
+    }
+    .hex-input {
+      min-height: 40px;
+      font-size: 16px; /* 16px+ keeps iOS from zooming in on focus */
+    }
+    .lighten-darken button {
+      min-height: 44px;
+      font-size: 14px;
+    }
   }
 </style>

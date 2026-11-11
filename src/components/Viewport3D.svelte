@@ -327,4 +327,14 @@
   .zoom-controls button:hover {
     background: var(--panel-bg-hover, #444);
   }
+  @media (pointer: coarse) {
+    .zoom-controls {
+      gap: 8px;
+    }
+    .zoom-controls button {
+      width: 44px;
+      height: 44px;
+      font-size: 22px;
+    }
+  }
 </style>

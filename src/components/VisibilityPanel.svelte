@@ -151,4 +151,30 @@
     text-align: center;
     min-height: 1.2em;
   }
+
+  /* Wide pane (small-screen layout, portrait): sections side by side. */
+  @container (min-width: 300px) {
+    .visibility-panel {
+      flex-direction: row;
+      gap: 24px;
+    }
+    .section:last-child {
+      flex: 1;
+    }
+    .figure {
+      max-width: 80px;
+    }
+  }
+
+  @media (pointer: coarse) {
+    .toggle {
+      min-height: 44px;
+      font-size: 15px;
+      gap: 10px;
+    }
+    .toggle input {
+      width: 22px;
+      height: 22px;
+    }
+  }
 </style>

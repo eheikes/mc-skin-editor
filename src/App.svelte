@@ -4,6 +4,7 @@
   import { ensureInitialSkin, persistCurrentSkin } from './lib/stores/savedSkins';
   import { undo, redo } from './lib/stores/history';
   import { activeTool, brushSize, mirrorEnabled, MIN_BRUSH_SIZE, MAX_BRUSH_SIZE } from './lib/stores/tool';
+  import { activePane } from './lib/stores/layout';
   import type { ToolId } from './lib/skin/types';
 
   import SkinManagerBar from './components/SkinManagerBar.svelte';
@@ -12,6 +13,7 @@
   import Palette from './components/Palette.svelte';
   import VisibilityPanel from './components/VisibilityPanel.svelte';
   import Canvas2D from './components/Canvas2D.svelte';
+  import PaneSwitcher from './components/PaneSwitcher.svelte';
 
   let ready = false;
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -79,14 +81,18 @@
   <SkinManagerBar />
 
   <div class="workspace">
+    <div class="rail">
+      <PaneSwitcher />
+    </div>
+
     <aside class="sidebar left">
-      <section class="panel">
+      <section class="panel" class:active={$activePane === 'tools'}>
         <Toolbar />
       </section>
-      <section class="panel">
+      <section class="panel" class:active={$activePane === 'color'}>
         <ColorPicker />
       </section>
-      <section class="panel">
+      <section class="panel" class:active={$activePane === 'palette'}>
         <Palette />
       </section>
     </aside>
@@ -100,10 +106,10 @@
     </main>
 
     <aside class="sidebar right">
-      <section class="panel">
+      <section class="panel" class:active={$activePane === 'layers'}>
         <VisibilityPanel />
       </section>
-      <section class="panel grow">
+      <section class="panel grow texture" class:active={$activePane === 'texture'}>
         <div class="panel-label">2D Texture Map</div>
         <Canvas2D />
       </section>
@@ -116,6 +122,7 @@
     display: flex;
     flex-direction: column;
     height: 100vh;
+    height: 100dvh;
   }
   .workspace {
     flex: 1;
@@ -138,6 +145,7 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 12px;
+    container-type: inline-size;
   }
   .panel.grow {
     flex: 1;
@@ -161,24 +169,83 @@
     overflow: hidden;
   }
 
-  @media (max-width: 900px) {
+  .rail {
+    display: none;
+  }
+
+  /*
+   * COMPACT layout, for tablets and phones (and short desktop windows): the
+   * side panels collapse into a single pane at a time, picked from a rail of
+   * buttons (or none, for maximum viewport space). The panels stay mounted
+   * and are only hidden, so e.g. the color wheel keeps its state.
+   *
+   * Keep this query in sync with the COMPACT queries in Toolbar.svelte and
+   * SkinManagerBar.svelte.
+   */
+  @media (max-width: 1024px), (max-height: 640px) {
     .workspace {
-      grid-template-columns: 1fr;
-      grid-template-rows: none;
-      grid-auto-rows: min-content;
+      grid-template-columns: auto auto minmax(0, 1fr);
+      grid-template-areas: 'rail pane view';
+      gap: 0;
+      padding: 8px;
     }
-    .viewport-area {
-      height: 60vh;
+    .rail {
+      display: block;
+      grid-area: rail;
+      margin-right: 8px;
+      overflow-y: auto;
     }
     .sidebar {
-      overflow-y: visible;
+      display: contents;
     }
-    .sidebar.left {
-      flex-direction: row;
-      flex-wrap: wrap;
+    .panel {
+      grid-area: pane;
+      width: 280px;
+      margin-right: 8px;
+      overflow-y: auto;
     }
-    .sidebar.left .panel {
-      flex: 1 1 200px;
+    .panel:not(.active) {
+      display: none;
+    }
+    .panel.grow {
+      min-height: 0;
+    }
+    /* Scale the texture map down to fit the pane instead of scrolling it. */
+    .texture :global(.canvas2d-wrap) {
+      flex: 1;
+      min-height: 0;
+      height: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .texture :global(canvas) {
+      max-width: 100%;
+      max-height: 100%;
+    }
+    .viewport-area {
+      grid-area: view;
+    }
+  }
+
+  @media (max-width: 1024px) and (orientation: portrait) {
+    .workspace {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr) auto auto;
+      grid-template-areas: 'view' 'pane' 'rail';
+    }
+    .rail {
+      margin: 6px 0 0;
+      overflow: visible;
+    }
+    .panel {
+      width: auto;
+      max-height: 45dvh;
+      margin: 8px 0 0;
+    }
+    .panel.grow {
+      height: 45dvh;
     }
   }
 </style>
